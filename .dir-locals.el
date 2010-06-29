@@ -1,0 +1,8 @@
+((nil . ((indent-tabs-mode . nil)
+         (tab-width . 4)
+         (fill-column . 80)))
+ (sh-mode . ((tab-width . 2)
+             (indent-tabs-mode . nil)))
+ (python-mode . ((tab-width . 4)
+                 (indent-tabs-mode . nil)
+                 (python-indent . 4))))
