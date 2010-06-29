@@ -2,7 +2,7 @@ from schemaless.column import ColumnExpression, Entity
 
 class Index(object):
 
-    def __init__(self, table, properties=[], match_on={}, shard_on=None, connection=None):
+    def __init__(self, table, properties=[], match_on={}, shard_on=None, connection=None, use_zlib=True):
         if shard_on is not None:
             raise NotImplementedError
     
@@ -10,6 +10,7 @@ class Index(object):
         self.properties = frozenset(properties)
         self.match_on = match_on
         self.connection = connection
+        self.use_zlib = use_zlib
 
     def __cmp__(self, other):
         return cmp(self.table, other.table)
@@ -58,7 +59,7 @@ class Index(object):
             q += ')'
             entity_rows = self.connection.query(*([q] + entity_ids))
             entity_rows.sort(key = lambda x: x['added_id'])
-            return [Entity.from_row(row) for row in entity_rows]
+            return [Entity.from_row(row, use_zlib=self.use_zlib) for row in entity_rows]
         else:
             return []
 

@@ -1,4 +1,5 @@
 import simplejson
+import zlib
 
 class Entity(dict):
 
@@ -7,8 +8,11 @@ class Entity(dict):
         return Entity(id=make_guid())
 
     @classmethod
-    def from_row(cls, row):
-        d = simplejson.loads(row['body'])
+    def from_row(cls, row, use_zlib=False):
+        body = row['body']
+        if use_zlib:
+            body = zlib.decompress(body)
+        d = simplejson.loads(body)
         d['id'] = row['id'].encode('hex')
         d['updated'] = row['updated']
         return cls(d)

@@ -1,5 +1,7 @@
 import time
 import simplejson
+import zlib
+
 import tornado.database
 
 from schemaless.column import Entity
@@ -8,16 +10,17 @@ from schemaless.guid import raw_guid
 
 class DataStore(object):
 
-    def __init__(self, mysql_shards=[], user=None, database=None, password=None, indexes=[]):
+    def __init__(self, mysql_shards=[], user=None, database=None, password=None, use_zlib=True, indexes=[]):
         if not mysql_shards:
             raise ValueError('Must specify at least one MySQL shard')
         if len(mysql_shards) > 1:
             raise NotImplementedError
+        self.use_zlib = use_zlib
         self.indexes = []
         self.connection = tornado.database.Connection(host=mysql_shards[0], user=user, password=password, database=database)
 
     def define_index(self, table, properties=[], match_on={}, shard_on=None):
-        idx = Index(table=table, properties=properties, match_on=match_on, shard_on=shard_on, connection=self.connection)
+        idx = Index(table=table, properties=properties, match_on=match_on, shard_on=shard_on, connection=self.connection, use_zlib=self.use_zlib)
         self.indexes.append(idx)
         return idx
 
@@ -34,7 +37,7 @@ class DataStore(object):
         entity_id = None
         entity = entity.copy()
 
-        entity.pop('updated', None)
+        entity['updated'] = time.time()
 
         # get the entity_id (or create a new one)
         entity_id = entity.pop('id', None)
@@ -42,9 +45,12 @@ class DataStore(object):
             entity_id = raw_guid()
         elif len(entity_id) != 16:
             entity_id = entity_id.decode('hex')
+        body = simplejson.dumps(entity)
+        if self.use_zlib:
+            body = zlib.compress(body, 1)
 
         queries = []
-        queries.append(['INSERT INTO entities (id, body) VALUES (%s, %s)', entity_id, simplejson.dumps(entity)])
+        queries.append(['INSERT INTO entities (id, updated, body) VALUES (%s, FROM_UNIXTIME(%s), %s)', entity_id, int(entity['updated']), body])
 
         indexes = []
         for idx in self._find_indexes(entity):
@@ -86,8 +92,8 @@ class DataStore(object):
         if len(id) == 32:
             id = id.decode('hex')
         row = self.connection.get('SELECT * FROM entities WHERE id = %s', id)
-        return Entity.from_row(row)
+        return Entity.from_row(row, use_zlib=self.use_zlib)
 
     def by_added_id(self, added_id):
         row = self.connection.get('SELECT * FROM entities WHERE added_id = %s', added_id)
-        return Entity.from_row(row)
+        return Entity.from_row(row, use_zlib=self.use_zlib)
