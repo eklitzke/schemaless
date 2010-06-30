@@ -7,12 +7,13 @@ Taylor in his post
 are a couple of other Python modules out there that do this already. Here's how
 schemaless is different:
 
- * There's no ORM. Schemaless provides just enough support to do simple queries
-   and automatically update indexes.
  * Only MySQL is supported. That said, I'd love to add SQLite support in the
    future.
  * Sharding isn't yet supported. Should be pretty straightforward to implement,
    though.
+ * There's an optional "ORM" (which isn't really relational) implemented as
+   `schemaless.orm`. The "ORM" really is optional, and the interface described
+   by FriendFeed is all usable and decoupled from the session/object stuff.
 
 Usage
 =====

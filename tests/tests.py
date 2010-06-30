@@ -1,18 +1,25 @@
 import unittest
 
 import schemaless
+import schemaless.orm
 from schemaless import c
 
-class SchemalessTestCase(unittest.TestCase):
+class TestBase(unittest.TestCase):
 
     def setUp(self):
-        self.ds = ds = schemaless.DataStore(mysql_shards=['localhost:3306'], user='test', password='test', database='test')
-        self.user = ds.define_index('index_user_id', ['user_id'])
-        self.user_name = ds.define_index('index_user_name', ['first_name', 'last_name'])
-        self.foo = ds.define_index('index_foo', ['bar'], {'m': 'right'})
+        super(TestBase, self).setUp()
+        self.ds = schemaless.DataStore(mysql_shards=['localhost:3306'], user='test', password='test', database='test')
+        self.user = self.ds.define_index('index_user_id', ['user_id'])
+        self.user_name = self.ds.define_index('index_user_name', ['first_name', 'last_name'])
+        self.foo = self.ds.define_index('index_foo', ['bar'], {'m': 'right'})
         for tbl in ['entities', 'index_user_id', 'index_user_name', 'index_foo']:
-            ds.connection.execute('DELETE FROM %s' % (tbl,))
-        self.entity = ds.put({'user_id': schemaless.guid(), 'first_name': 'evan', 'last_name': 'klitzke'})
+            self.ds.connection.execute('DELETE FROM %s' % (tbl,))
+
+class SchemalessTestCase(TestBase):
+
+    def setUp(self):
+        super(SchemalessTestCase, self).setUp()
+        self.entity = self.ds.put({'user_id': schemaless.guid(), 'first_name': 'evan', 'last_name': 'klitzke'})
 
     def test_query(self):
         self.assertEqual(1, len(self.user.query(c.user_id == self.entity.user_id)))
@@ -45,6 +52,54 @@ class SchemalessTestCase(unittest.TestCase):
         rows = self.user.query(c.user_id.in_(user_ids))
         self.assertEqual(2, len(rows))
         self.assertEqual(set(user_ids), set(row['user_id'] for row in rows))
+
+class SchemalessORMTestCase(TestBase):
+
+    def setUp(self):
+        super(SchemalessORMTestCase, self).setUp()
+        session = schemaless.orm.Session(self.ds)
+        base_class = schemaless.orm.make_base(session)
+
+        class User(base_class):
+            _tag = 1
+            _persist = ['user_id', 'first_name', 'last_name']
+            _id_field = 'user_id'
+
+        self.User = User
+
+    def test_create_object_save_delete(self):
+        # create a new, empty object
+        u = self.User()
+        assert not u._saveable()
+        assert u.is_dirty
+
+        # populate some, but not all of the fields; the object should be dirty,
+        # but not saveable
+        u.user_id = schemaless.guid()
+        u.first_name = 'evan'
+        assert not u._saveable()
+        assert u.is_dirty
+        user = self.user.get(c.user_id == u.user_id)
+        assert not user
+
+        # finish populating the fields, check that the object is saveable
+        u.last_name = 'klitzke'
+        assert u._saveable()
+        assert u.is_dirty
+
+        # persist the object, check that it made it to the datastore
+        u.save()
+        assert u._saveable()
+        assert not u.is_dirty
+        user = self.user.get(c.user_id == u.user_id)
+        assert user
+
+        # delete the object, check that it's deleted from the datastore
+        u.delete()
+        assert u._saveable()
+        assert not u.is_dirty
+        user = self.user.get(c.user_id == u.user_id)
+        assert not user
 
 if __name__ == '__main__':
     unittest.main()

@@ -5,5 +5,5 @@ setup(name='Schemaless',
       description='Schema-less MySQL pattern',
       author='Evan Klitzke',
       author_email='evan@eklitzke.org',
-      packages=['schemaless']
+      packages=['schemaless', 'schemaless.orm']
      )
