@@ -97,6 +97,29 @@ class ColumnExpression(object):
         else:
             raise ValueError('Unknown operator')
 
+    def check(self, val):
+        val = val[self.name]
+        if self.op == self.OP_LT:
+            return val < self.rhs
+        elif self.op == self.OP_LE:
+            return val <= self.rhs
+        elif self.op == self.OP_EQ:
+            return val == self.rhs
+        elif self.op == self.OP_NE:
+            return val != self.rhs
+        elif self.op == self.OP_GT:
+            return val > self.rhs
+        elif self.op == self.OP_GE:
+            return val >= self.rhs
+        elif self.op == self.OP_IN:
+            return val in self.rhs
+        else:
+            raise ValueError('Unknown operator')
+
+    def __str__(self):
+        return '%s(name=%r, op=%d, rhs=%r)' % (self.__class__.__name__, self.name, self.op, self.rhs)
+    __repr__ = __str__
+
 class ColumnBuilder(object):
 
     def __init__(self):

@@ -53,17 +53,20 @@ class SchemalessTestCase(TestBase):
         self.assertEqual(2, len(rows))
         self.assertEqual(set(user_ids), set(row['user_id'] for row in rows))
 
-class SchemalessORMTestCase(TestBase):
+class SchemalessORMTestCase(unittest.TestCase):
 
     def setUp(self):
-        super(SchemalessORMTestCase, self).setUp()
-        session = schemaless.orm.Session(self.ds)
+        datastore = schemaless.DataStore(mysql_shards=['localhost:3306'], user='test', password='test', database='test')
+        session = schemaless.orm.Session(datastore)
         base_class = schemaless.orm.make_base(session)
 
         class User(base_class):
             _tag = 1
             _persist = ['user_id', 'first_name', 'last_name']
             _id_field = 'user_id'
+            _indexes = [schemaless.orm.Index('index_user_id', ['user_id']),
+                        schemaless.orm.Index('index_user_name', ['first_name', 'last_name'])
+                       ]
 
         self.User = User
 
@@ -79,7 +82,7 @@ class SchemalessORMTestCase(TestBase):
         u.first_name = 'evan'
         assert not u._saveable()
         assert u.is_dirty
-        user = self.user.get(c.user_id == u.user_id)
+        user = self.User.get(c.user_id == u.user_id)
         assert not user
 
         # finish populating the fields, check that the object is saveable
@@ -91,14 +94,14 @@ class SchemalessORMTestCase(TestBase):
         u.save()
         assert u._saveable()
         assert not u.is_dirty
-        user = self.user.get(c.user_id == u.user_id)
+        user = self.User.get(c.user_id == u.user_id)
         assert user
 
         # delete the object, check that it's deleted from the datastore
         u.delete()
         assert u._saveable()
         assert not u.is_dirty
-        user = self.user.get(c.user_id == u.user_id)
+        user = self.User.get(c.user_id == u.user_id)
         assert not user
 
 if __name__ == '__main__':

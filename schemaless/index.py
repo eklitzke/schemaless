@@ -1,5 +1,17 @@
 from schemaless.column import ColumnExpression, Entity
 
+def reduce_args(*exprs, **kwargs):
+    limit = kwargs.pop('limit', None)
+    order_by = kwargs.pop('order_by', None)
+
+    exprs = list(exprs)
+    for k, v in kwargs.iteritems():
+        exprs.append(ColumnExpression(k, ColumnExpression.EQ, v))
+
+    if not exprs:
+        raise ValueError('Must provide args/kwargs for a WHERE clause')
+    return exprs, order_by, limit
+
 class Index(object):
 
     def __init__(self, table, properties=[], match_on={}, shard_on=None, connection=None, use_zlib=True):
@@ -24,15 +36,10 @@ class Index(object):
         return True
     
     def _query(self, *exprs, **kwargs):
-        limit = kwargs.pop('limit', None)
-        order_by = kwargs.pop('order_by', None)
+        exprs, order_by, limit = reduce_args(*exprs, **kwargs)
+        return self._do_query(exprs, order_by, limit)
 
-        exprs = list(exprs)
-        for k, v in kwargs.iteritems():
-            exprs.append(ColumnExpression(k, ColumnExpression.EQ, v))
-
-        if not exprs:
-            raise ValueError('Must provide args/kwargs for a WHERE clause')
+    def _do_query(self, exprs, order_by, limit):
 
         values = []
         where_clause = []
