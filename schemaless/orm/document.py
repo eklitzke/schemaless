@@ -149,4 +149,8 @@ def make_base(session, meta_base=type, base_cls=object):
             else:
                 raise ValueError('Got more than one result')
 
+        @classmethod
+        def query(cls, *exprs, **kwargs):
+            return cls._query(*exprs, **kwargs)
+
     return Document

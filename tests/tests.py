@@ -57,8 +57,8 @@ class SchemalessORMTestCase(unittest.TestCase):
 
     def setUp(self):
         datastore = schemaless.DataStore(mysql_shards=['localhost:3306'], user='test', password='test', database='test')
-        session = schemaless.orm.Session(datastore)
-        base_class = schemaless.orm.make_base(session)
+        self.session = schemaless.orm.Session(datastore)
+        base_class = schemaless.orm.make_base(self.session)
 
         class User(base_class):
             _tag = 1
@@ -103,6 +103,18 @@ class SchemalessORMTestCase(unittest.TestCase):
         assert not u.is_dirty
         user = self.User.get(c.user_id == u.user_id)
         assert not user
+
+    def test_in_query(self):
+        user_ids = []
+        users = []
+        for x in range(5):
+            u = self.User(user_id=schemaless.guid(), first_name='foo', last_name='bar')
+            user_ids.append(u.user_id)
+            users.append(u)
+        self.session.save()
+
+        fetched_users = self.User.query(c.user_id.in_(user_ids[:3]))
+        self.assertEqual(set(user_ids[:3]), set(u.user_id for u in users[:3]))
 
 if __name__ == '__main__':
     unittest.main()
