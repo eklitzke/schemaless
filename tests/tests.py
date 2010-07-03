@@ -2,7 +2,7 @@ import logging
 import unittest
 
 import schemaless
-import schemaless.orm
+from schemaless import orm
 from schemaless import c
 
 class TestBase(unittest.TestCase):
@@ -61,16 +61,16 @@ class SchemalessORMTestCase(TestBase):
         datastore = schemaless.DataStore(mysql_shards=['localhost:3306'], user='test', password='test', database='test')
         self.clear_tables(datastore)
 
-        self.session = schemaless.orm.Session(datastore)
-        base_class = schemaless.orm.make_base(self.session)
+        self.session = orm.Session(datastore)
+        base_class = orm.make_base(self.session)
 
         class User(base_class):
             _tag = 1
-            _persist = ['user_id', 'first_name', 'last_name']
-            _id_field = 'user_id'
-            _indexes = [schemaless.orm.Index('index_user_id', ['user_id']),
-                        schemaless.orm.Index('index_user_name', ['first_name', 'last_name'])
-                       ]
+            _columns = [orm.Column('user_id'),
+                        orm.Column('first_name'),
+                        orm.Column('last_name')]
+            _indexes = [orm.Index('index_user_id', ['user_id']),
+                        orm.Index('index_user_name', ['first_name', 'last_name'])]
 
         self.User = User
 
@@ -125,6 +125,27 @@ class SchemalessORMTestCase(TestBase):
         u.save()
         v = self.User.get(c.first_name == 'foo', c.last_name == 'bar')
         self.assertEqual(u.user_id, v.user_id)
+
+    def test_update(self):
+        u = self.User(user_id=schemaless.guid(), first_name='foo', last_name='bar')
+        u.save()
+        v = self.User.get(c.first_name == 'foo', c.last_name == 'bar')
+        self.assertEqual(u.id, v.id)
+        self.assertEqual(u.user_id, v.user_id)
+
+        u.first_name = 'baz'
+        u.save()
+        v = self.User.get(c.first_name == 'foo', c.last_name == 'bar')
+        self.assertEqual(None, v)
+        v = self.User.get(c.first_name == 'baz', c.last_name == 'bar')
+        self.assertEqual(u.id, v.id)
+        self.assertEqual(u.user_id, v.user_id)
+
+    def test_double_delete(self):
+        u = self.User(user_id=schemaless.guid(), first_name='foo', last_name='bar')
+        u.save()
+        u.delete()
+        u.delete()
 
 if __name__ == '__main__':
     unittest.main()

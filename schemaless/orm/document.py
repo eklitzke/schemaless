@@ -1,6 +1,14 @@
 from collections import defaultdict
 from index import IndexCollection
 from schemaless.index import reduce_args
+from schemaless.log import ClassLogger
+
+class Column(object):
+
+    def __init__(self, name, default=None, nullable=False):
+        self.name = name
+        self.default = default
+        self.nullable = nullable
 
 def make_base(session, meta_base=type, base_cls=object):
 
@@ -15,12 +23,17 @@ def make_base(session, meta_base=type, base_cls=object):
                     raise TypeError('Tag %r has already been defined' % (cls_dict['_tag'],))
                 tags.add(cls_dict['_tag'])
 
-            for kind in ['_optional', '_persist']:
-                s = set()
-                for b in bases:
-                    s |= set(getattr(b, kind, set()))
-                s |= set(cls_dict.get(kind, set()))
-                cls_dict[kind] = s
+            s = set()
+            for b in bases:
+                s |= set(getattr(b, '_columns', set()))
+            s |= set(cls_dict.get('_columns', set()))
+            for x in s:
+                if not isinstance(x, Column):
+                    raise TypeError('Got unexpected %r instead of Column' % (x,))
+
+            cls_dict['_columns'] = s
+            cls_dict['_column_names'] = frozenset(c.name for c in s)
+            cls_dict['_required_columns'] = frozenset(c.name for c in s if not c.nullable)
 
             if not '_abstract' in cls_dict:
                 cls_dict.setdefault('_indexes', [])
@@ -36,10 +49,11 @@ def make_base(session, meta_base=type, base_cls=object):
         __metaclass__ = metacls
 
         _abstract = True
-        _persist = ['_tag']
-        _optional = []
+        _columns = [Column('_tag')]
         _indexes = []
         _id_field = None
+
+        log = ClassLogger()
 
         def __init__(self, from_dict=None, is_dirty=True, **kwargs):
 
@@ -58,19 +72,30 @@ def make_base(session, meta_base=type, base_cls=object):
             self.__dict__['_schemaless_id'] = from_dict.get('id', None)
 
             for k, v in from_dict.iteritems():
-                if k in self._persist:
+                if k in self._column_names:
                     self.__dict__[k] = v
                     self._schemaless_collected_fields.add(k)
+
+            # Add default values
+            dict_keys = from_dict.keys()
+            for c in self._columns:
+                if c.default is not None and c.name not in dict_keys:
+                    if callable(c.default):
+                        v = c.default()
+                    else:
+                        v = c.default
+                    self.__dict__[c.name] = v
+                    self._schemaless_collected_fields.add(c.name)
 
             self._schemaless_dirty = is_dirty
             if self._schemaless_dirty and self._saveable():
                 self._session.dirty_documents.add(self)
 
         def _saveable(self):
-            return self._schemaless_collected_fields >= self._persist
+            return self._schemaless_collected_fields >= self._required_columns
 
         def __setattr__(self, k, v):
-            if k in self._persist:
+            if k in self._column_names:
                 self._schemaless_collected_fields.add(k)
                 self._schemaless_dirty = True
                 if self not in self._session.dirty_documents and self._saveable():
@@ -90,24 +115,32 @@ def make_base(session, meta_base=type, base_cls=object):
 
         @classmethod
         def from_datastore(cls, d):
-            missing = self._persist - set(d.keys())
+            missing = cls._required_columns - set(d.keys())
             if missing:
                 raise ValueError('Missing the following keys: ' + ', '.join(k for k in sorted(missing)))
             return cls(d, is_dirty=False)
 
         def to_dict(self):
             d = {}
-            for f in self._persist:
-                d[f] = getattr(self, f)
-            for f in self._optional:
-                if hasattr(self, f):
+            for f in self._column_names:
+                if f in self._required_columns:
+                    d[f] = getattr(self, f)
+                elif hasattr(self, f):
                     d[f] = getattr(self, f)
             return d
 
+        @property
+        def id(self):
+            return getattr(self, '_schemaless_id', None)
+
         def save(self, clear_session=True):
             if not self._saveable():
-                raise ValueError('This object is not yet saveable')
+                missing = self._required_columns - self._schemaless_collected_fields
+                raise ValueError('This object is not yet saveable, missing: %s' % (', '.join(str(k) for k in missing),))
             if self._schemaless_dirty:
+                if self.id is not None:
+                    # FIXME: this is overly pessimistic, could just do an UPDATE
+                    self._session.datastore.delete(id=self.id)
                 obj = self._session.datastore.put(self.to_dict())
                 self._schemaless_id = obj['id']
                 self._schemaless_dirty = False
@@ -135,7 +168,7 @@ def make_base(session, meta_base=type, base_cls=object):
             retained_result = []
             for x in result:
                 if all(e.check(x) for e in exprs):
-                    retained_result.append(x)
+                    retained_result.append(cls.from_datastore(x))
             return retained_result
 
         @classmethod
@@ -152,5 +185,14 @@ def make_base(session, meta_base=type, base_cls=object):
         @classmethod
         def query(cls, *exprs, **kwargs):
             return cls._query(*exprs, **kwargs)
+
+        @classmethod
+        def by_id(cls, id):
+            entity = cls._session.datastore.by_id(id)
+            if not entity:
+                return entity
+            if entity._tag != cls._tag:
+                raise ValueError('Entity had tag %r, our class has tag %r' % (entity._tag, cls._tag))
+            return cls.from_datastore(entity)
 
     return Document

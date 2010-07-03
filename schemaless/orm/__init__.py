@@ -1,3 +1,3 @@
 from session import Session
 from index import Index
-from document import make_base
+from document import make_base, Column

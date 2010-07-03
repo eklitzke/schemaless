@@ -7,8 +7,11 @@ import tornado.database
 from schemaless.column import Entity
 from schemaless.index import Index
 from schemaless.guid import raw_guid
+from schemaless.log import ClassLogger
 
 class DataStore(object):
+
+    log = ClassLogger()
 
     def __init__(self, mysql_shards=[], user=None, database=None, password=None, use_zlib=True, indexes=[]):
         if not mysql_shards:
@@ -67,7 +70,11 @@ class DataStore(object):
 
         pk = self.connection.execute(*queries[0])
         for q in queries[1:]:
-            self.connection.execute(*q)
+            try:
+                self.connection.execute(*q)
+            except:
+                self.log.exception('Failed to execute query %s' % (q,))
+                raise
         return self.by_added_id(pk)
 
     def delete(self, entity=None, id=None):
@@ -77,6 +84,8 @@ class DataStore(object):
             raise ValueError('Cannot provide an entity without an id')
         if not entity:
             entity = self.by_id(id)
+            if not entity:
+                return 0
         entity_id = entity['id'].decode('hex')
 
         def _delete(table_name, col):
@@ -92,7 +101,7 @@ class DataStore(object):
         if len(id) == 32:
             id = id.decode('hex')
         row = self.connection.get('SELECT * FROM entities WHERE id = %s', id)
-        return Entity.from_row(row, use_zlib=self.use_zlib)
+        return Entity.from_row(row, use_zlib=self.use_zlib) if row else None
 
     def by_added_id(self, added_id):
         row = self.connection.get('SELECT * FROM entities WHERE added_id = %s', added_id)

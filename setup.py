@@ -1,7 +1,7 @@
 from distutils.core import setup
 
 setup(name='Schemaless',
-      version='0.1',
+      version='0.2',
       description='Schema-less MySQL pattern',
       author='Evan Klitzke',
       author_email='evan@eklitzke.org',

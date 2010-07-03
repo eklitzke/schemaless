@@ -43,6 +43,6 @@ class IndexCollection(object):
                 best = val
 
         best = best[-1]
-        self.log.debug('chose %s as best index for %s' % (best, fields))
+        self.log.debug('chose %s as best index for %s' % (best.underlying, fields))
         self.answer_cache[fields] = best
         return best
