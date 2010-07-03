@@ -1,4 +1,5 @@
 import schemaless.index
+from schemaless.log import ClassLogger
 
 class Index(object):
 
@@ -16,6 +17,8 @@ class Index(object):
         return self.underlying
 
 class IndexCollection(object):
+
+    log = ClassLogger()
 
     def __init__(self, indexes):
         self.indexes = indexes
@@ -40,5 +43,6 @@ class IndexCollection(object):
                 best = val
 
         best = best[-1]
+        self.log.debug('chose %s as best index for %s' % (best, fields))
         self.answer_cache[fields] = best
         return best

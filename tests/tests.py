@@ -1,3 +1,4 @@
+import logging
 import unittest
 
 import schemaless
@@ -6,19 +7,20 @@ from schemaless import c
 
 class TestBase(unittest.TestCase):
 
-    def setUp(self):
-        super(TestBase, self).setUp()
-        self.ds = schemaless.DataStore(mysql_shards=['localhost:3306'], user='test', password='test', database='test')
-        self.user = self.ds.define_index('index_user_id', ['user_id'])
-        self.user_name = self.ds.define_index('index_user_name', ['first_name', 'last_name'])
-        self.foo = self.ds.define_index('index_foo', ['bar'], {'m': 'right'})
+    def clear_tables(self, datastore):
         for tbl in ['entities', 'index_user_id', 'index_user_name', 'index_foo']:
-            self.ds.connection.execute('DELETE FROM %s' % (tbl,))
+            datastore.connection.execute('DELETE FROM %s' % (tbl,))
 
 class SchemalessTestCase(TestBase):
 
     def setUp(self):
         super(SchemalessTestCase, self).setUp()
+        self.ds = schemaless.DataStore(mysql_shards=['localhost:3306'], user='test', password='test', database='test')
+        self.user = self.ds.define_index('index_user_id', ['user_id'])
+        self.user_name = self.ds.define_index('index_user_name', ['first_name', 'last_name'])
+        self.foo = self.ds.define_index('index_foo', ['bar'], {'m': 'right'})
+        self.clear_tables(self.ds)
+
         self.entity = self.ds.put({'user_id': schemaless.guid(), 'first_name': 'evan', 'last_name': 'klitzke'})
 
     def test_query(self):
@@ -53,10 +55,12 @@ class SchemalessTestCase(TestBase):
         self.assertEqual(2, len(rows))
         self.assertEqual(set(user_ids), set(row['user_id'] for row in rows))
 
-class SchemalessORMTestCase(unittest.TestCase):
+class SchemalessORMTestCase(TestBase):
 
     def setUp(self):
         datastore = schemaless.DataStore(mysql_shards=['localhost:3306'], user='test', password='test', database='test')
+        self.clear_tables(datastore)
+
         self.session = schemaless.orm.Session(datastore)
         base_class = schemaless.orm.make_base(self.session)
 
@@ -115,6 +119,12 @@ class SchemalessORMTestCase(unittest.TestCase):
 
         fetched_users = self.User.query(c.user_id.in_(user_ids[:3]))
         self.assertEqual(set(user_ids[:3]), set(u.user_id for u in users[:3]))
+
+    def test_name_query(self):
+        u = self.User(user_id=schemaless.guid(), first_name='foo', last_name='bar')
+        u.save()
+        v = self.User.get(c.first_name == 'foo', c.last_name == 'bar')
+        self.assertEqual(u.user_id, v.user_id)
 
 if __name__ == '__main__':
     unittest.main()
