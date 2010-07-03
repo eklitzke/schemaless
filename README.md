@@ -120,3 +120,12 @@ This example assumes the same MySQL tables as in the previous example:
     # first_name/last_name, and to do the age filtering
     queried_user = User.get(c.first_name == 'evan', c.last_name == 'klitzke', c.age < 100)
     assert user == queried_user
+
+Adding Indexes
+==============
+
+There's a class called `IndexUpdater` exported by the `schemaless` module that
+provides a basic template for batches that add/update/prune indexes. It's
+probably easiest to understand how it works if you look at the source code for
+it, which provides an example of a batch that adds a new index in the module
+documentation. Look under `schemaless/batch.py`.
