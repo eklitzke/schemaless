@@ -147,5 +147,14 @@ class SchemalessORMTestCase(TestBase):
         u.delete()
         u.delete()
 
+    def test_update_preserves_id(self):
+        u = self.User(user_id=schemaless.guid(), first_name='foo', last_name='bar')
+        u.save()
+        orig_id = u.id
+
+        u.first_name = 'baz'
+        u.save()
+        self.assertEqual(orig_id, u.id)
+
 if __name__ == '__main__':
     unittest.main()

@@ -121,7 +121,7 @@ def make_base(session, meta_base=type, base_cls=object):
             return cls(d, is_dirty=False)
 
         def to_dict(self):
-            d = {}
+            d = {'id': self.id}
             for f in self._column_names:
                 if f in self._required_columns:
                     d[f] = getattr(self, f)
@@ -138,9 +138,6 @@ def make_base(session, meta_base=type, base_cls=object):
                 missing = self._required_columns - self._schemaless_collected_fields
                 raise ValueError('This object is not yet saveable, missing: %s' % (', '.join(str(k) for k in missing),))
             if self._schemaless_dirty:
-                if self.id is not None:
-                    # FIXME: this is overly pessimistic, could just do an UPDATE
-                    self._session.datastore.delete(id=self.id)
                 obj = self._session.datastore.put(self.to_dict())
                 self._schemaless_id = obj['id']
                 self._schemaless_dirty = False

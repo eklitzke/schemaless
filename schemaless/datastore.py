@@ -37,23 +37,32 @@ class DataStore(object):
                 yield idx
     
     def put(self, entity):
-        entity_id = None
-        entity = entity.copy()
-
+        is_update = False
         entity['updated'] = time.time()
+        entity_id = None
+
+        entity_copy = entity.copy()
 
         # get the entity_id (or create a new one)
-        entity_id = entity.pop('id', None)
+        entity_id = entity_copy.pop('id', None)
         if entity_id is None:
             entity_id = raw_guid()
-        elif len(entity_id) != 16:
-            entity_id = entity_id.decode('hex')
-        body = simplejson.dumps(entity)
+        else:
+            is_update = True
+            if len(entity_id) != 16:
+                entity_id = entity_id.decode('hex')
+        body = simplejson.dumps(entity_copy)
         if self.use_zlib:
             body = zlib.compress(body, 1)
 
-        queries = []
-        queries.append(['INSERT INTO entities (id, updated, body) VALUES (%s, FROM_UNIXTIME(%s), %s)', entity_id, int(entity['updated']), body])
+        if is_update:
+            self._put_update(entity_id, entity_copy, body)
+            return entity
+        else:
+            return self._put_new(entity_id, entity_copy, body)
+
+    def _put_new(self, entity_id, entity, body):
+        pk = self.connection.execute('INSERT INTO entities (id, updated, body) VALUES (%s, FROM_UNIXTIME(%s), %s)', entity_id, int(entity['updated']), body)
 
         indexes = []
         for idx in self._find_indexes(entity):
@@ -66,16 +75,33 @@ class DataStore(object):
             q = 'INSERT INTO %s (%s) VALUES (' % (idx.table, ', '.join(pnames))
             q += ', '.join('%s' for x in pnames)
             q += ')'
-            queries.append([q] + v)
-
-        pk = self.connection.execute(*queries[0])
-        for q in queries[1:]:
             try:
-                self.connection.execute(*q)
+                self.connection.execute(q, *v)
             except:
-                self.log.exception('Failed to execute query %s' % (q,))
+                self.log.exception('Failed to execute _put_new query %r, vals = %r' % (q, v))
                 raise
+
         return self.by_added_id(pk)
+
+    def _put_update(self, entity_id, entity, body):
+        self.connection.execute('UPDATE entities SET updated = CURRENT_TIMESTAMP, body = %s WHERE id = %s', body, entity_id)
+
+        indexes = []
+        for idx in self._find_indexes(entity):
+            vals = []
+            q = 'UPDATE %s SET ' % idx.table
+            qs = []
+            for p in idx.properties:
+                qs.append('%s = %%s' % p)
+                vals.append(entity[p])
+            q += ', '.join(qs)
+            q += ' WHERE entity_id = %s'
+            vals.append(entity_id)
+            try:
+                self.connection.execute(q, *vals)
+            except:
+                self.log.exception('Failed to execute _put_update query %r, vals = %r' % (q, vals))
+                raise
 
     def delete(self, entity=None, id=None):
         if entity is None and id is None:
