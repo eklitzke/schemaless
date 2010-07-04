@@ -1,3 +1,4 @@
+import datetime
 import logging
 import unittest
 
@@ -68,7 +69,8 @@ class SchemalessORMTestCase(TestBase):
             _tag = 1
             _columns = [orm.Column('user_id'),
                         orm.Column('first_name'),
-                        orm.Column('last_name')]
+                        orm.Column('last_name'),
+                        orm.Column('time_created', default=datetime.datetime.now, convert=schemaless.orm.converters.DateTimeConverter)]
             _indexes = [orm.Index('index_user_id', ['user_id']),
                         orm.Index('index_user_name', ['first_name', 'last_name'])]
 
@@ -156,5 +158,12 @@ class SchemalessORMTestCase(TestBase):
         u.save()
         self.assertEqual(orig_id, u.id)
 
+    def test_converter(self):
+        u = self.User(user_id=schemaless.guid(), first_name='foo', last_name='bar')
+        u.save()
+        self.assert_(isinstance(u.time_created, datetime.datetime))
+
+        v = self.User.get(c.user_id == u.user_id)
+        self.assert_(isinstance(v.time_created, datetime.datetime))
 if __name__ == '__main__':
     unittest.main()

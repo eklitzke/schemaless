@@ -5,10 +5,11 @@ from schemaless.log import ClassLogger
 
 class Column(object):
 
-    def __init__(self, name, default=None, nullable=False):
+    def __init__(self, name, default=None, nullable=False, convert=None):
         self.name = name
         self.default = default
         self.nullable = nullable
+        self.convert = convert
 
 def make_base(session, meta_base=type, base_cls=object):
 
@@ -32,6 +33,7 @@ def make_base(session, meta_base=type, base_cls=object):
                     raise TypeError('Got unexpected %r instead of Column' % (x,))
 
             cls_dict['_columns'] = s
+            cls_dict['_column_map'] = dict((c.name, c) for c in s)
             cls_dict['_column_names'] = frozenset(c.name for c in s)
             cls_dict['_required_columns'] = frozenset(c.name for c in s if not c.nullable)
 
@@ -118,15 +120,23 @@ def make_base(session, meta_base=type, base_cls=object):
             missing = cls._required_columns - set(d.keys())
             if missing:
                 raise ValueError('Missing the following keys: ' + ', '.join(k for k in sorted(missing)))
+            for k, v in d.iteritems():
+                c = cls._column_map.get(k)
+                if c and c.convert:
+                    d[k] = c.convert.from_db(v)
+
             return cls(d, is_dirty=False)
 
         def to_dict(self):
             d = {'id': self.id}
             for f in self._column_names:
                 if f in self._required_columns:
-                    d[f] = getattr(self, f)
+                    val = getattr(self, f)
                 elif hasattr(self, f):
-                    d[f] = getattr(self, f)
+                    val = getattr(self, f)
+                if self._column_map[f].convert:
+                    val = self._column_map[f].convert.to_db(val)
+                d[f] = val
             return d
 
         @property
