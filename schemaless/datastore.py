@@ -61,47 +61,45 @@ class DataStore(object):
         else:
             return self._put_new(entity_id, entity_copy, body)
 
-    def _put_new(self, entity_id, entity, body):
-        pk = self.connection.execute('INSERT INTO entities (id, updated, body) VALUES (%s, FROM_UNIXTIME(%s), %s)', entity_id, int(entity['updated']), body)
+    def _insert_index(self, index, entity_id, entity):
+        pnames = ['entity_id']
+        vals = [entity_id]
+        for p in index.properties:
+            pnames.append(p)
+            vals.append(entity[p])
 
-        indexes = []
-        for idx in self._find_indexes(entity):
-            pnames = ['entity_id']
-            v = [entity_id]
-            for p in idx.properties:
-                pnames.append(p)
-                v.append(entity[p])
+        q = 'INSERT INTO %s (%s) VALUES (' % (index.table, ', '.join(pnames))
+        q += ', '.join('%s' for x in pnames)
+        q += ')'
+        self.connection.execute(q, *vals)
 
-            q = 'INSERT INTO %s (%s) VALUES (' % (idx.table, ', '.join(pnames))
-            q += ', '.join('%s' for x in pnames)
-            q += ')'
-            try:
-                self.connection.execute(q, *v)
-            except:
-                self.log.exception('Failed to execute _put_new query %r, vals = %r' % (q, v))
-                raise
-
-        return self.by_added_id(pk)
-
-    def _put_update(self, entity_id, entity, body):
-        self.connection.execute('UPDATE entities SET updated = CURRENT_TIMESTAMP, body = %s WHERE id = %s', body, entity_id)
-
-        indexes = []
-        for idx in self._find_indexes(entity):
+    def _update_index(self, index, entity_id, entity):
+        try:
+            self._insert_index(index, entity_id, entity)
+        except tornado.database.IntegrityError:
             vals = []
-            q = 'UPDATE %s SET ' % idx.table
+            q = 'UPDATE %s SET ' % index.table
             qs = []
-            for p in idx.properties:
+            for p in index.properties:
                 qs.append('%s = %%s' % p)
                 vals.append(entity[p])
             q += ', '.join(qs)
             q += ' WHERE entity_id = %s'
             vals.append(entity_id)
-            try:
-                self.connection.execute(q, *vals)
-            except:
-                self.log.exception('Failed to execute _put_update query %r, vals = %r' % (q, vals))
-                raise
+            self.connection.execute(q, *vals)
+        except Exception:
+            raise
+
+    def _put_new(self, entity_id, entity, body):
+        pk = self.connection.execute('INSERT INTO entities (id, updated, body) VALUES (%s, FROM_UNIXTIME(%s), %s)', entity_id, int(entity['updated']), body)
+        for idx in self._find_indexes(entity):
+            self._insert_index(idx, entity_id, entity)
+        return self.by_added_id(pk)
+
+    def _put_update(self, entity_id, entity, body):
+        self.connection.execute('UPDATE entities SET updated = CURRENT_TIMESTAMP, body = %s WHERE id = %s', body, entity_id)
+        for idx in self._find_indexes(entity):
+            self._update_index(idx, entity_id, entity)
 
     def delete(self, entity=None, id=None):
         if entity is None and id is None:
