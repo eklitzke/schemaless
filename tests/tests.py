@@ -9,7 +9,7 @@ from schemaless import c
 class TestBase(unittest.TestCase):
 
     def clear_tables(self, datastore):
-        for tbl in ['entities', 'index_user_id', 'index_user_name', 'index_foo']:
+        for tbl in ['entities', 'index_user_id', 'index_user_name', 'index_foo', 'index_birthdate', 'index_todo_user_id', 'index_todo_user_id_time']:
             datastore.connection.execute('DELETE FROM %s' % (tbl,))
 
 class SchemalessTestCase(TestBase):
@@ -56,22 +56,36 @@ class SchemalessTestCase(TestBase):
         self.assertEqual(2, len(rows))
         self.assertEqual(set(user_ids), set(row['user_id'] for row in rows))
 
-class SchemalessORMTestCase(TestBase):
-
+class ORMTestCase(TestBase):
     def setUp(self):
         datastore = schemaless.DataStore(mysql_shards=['localhost:3306'], user='test', password='test', database='test')
         self.clear_tables(datastore)
 
         self.session = orm.Session(datastore)
-        base_class = orm.make_base(self.session)
+        self.base_class = orm.make_base(self.session)
 
-        class User(base_class):
+    @property
+    def connection(self):
+        return self.session.datastore.connection
+
+    def get_index_count(self, index_name):
+        row = self.connection.get('SELECT COUNT(*) AS count FROM %s' % (index_name,))
+        return row['count']
+
+class SchemalessORMTestCase(ORMTestCase):
+
+    def setUp(self):
+        super(SchemalessORMTestCase, self).setUp()
+
+        class User(self.base_class):
             _tag = 1
             _columns = [orm.Column('user_id'),
                         orm.Column('first_name'),
                         orm.Column('last_name'),
+                        orm.Column('birthdate', nullable=True),
                         orm.Column('time_created', default=datetime.datetime.now, convert=schemaless.orm.converters.DateTimeConverter)]
             _indexes = [orm.Index('index_user_id', ['user_id']),
+                        orm.Index('index_birthdate', ['birthdate']),
                         orm.Index('index_user_name', ['first_name', 'last_name'])]
 
         self.User = User
@@ -165,5 +179,47 @@ class SchemalessORMTestCase(TestBase):
 
         v = self.User.get(c.user_id == u.user_id)
         self.assert_(isinstance(v.time_created, datetime.datetime))
+
+    def test_index_update(self):
+        u = self.User(user_id=schemaless.guid(), first_name='evan', last_name='klitzke')
+        u.save()
+
+        self.assertEqual(self.get_index_count('index_birthdate'), 0)
+
+        u.birthdate = '1986-09-19'
+        u.save()
+        self.assertEqual(self.get_index_count('index_birthdate'), 1)
+
+class ManyToOneORMTestCase(ORMTestCase):
+
+    def setUp(self):
+        super(ManyToOneORMTestCase, self).setUp()
+
+        class ToDo(self.base_class):
+            _tag = 1
+            _columns = [orm.Column('user_id'),
+                        orm.Column('action'),
+                        orm.Column('completion_time', default=None, nullable=True, convert=schemaless.orm.converters.DateTimeConverter)]
+            _indexes = [orm.Index('index_todo_user_id', ['user_id'])]
+                        #orm.Index('index_todo_user_id_time', ['user_id', 'completion_time'])]
+
+        self.ToDo = ToDo
+
+    @property
+    def connection(self):
+        return self.session.datastore.connection
+
+    def test_update_multiple(self):
+        user_id = schemaless.guid()
+        item1 = self.ToDo(user_id=user_id, action='buy groceries').save()
+        item2 = self.ToDo(user_id=user_id, action='buy groceries').save()
+
+        self.assertEqual(self.get_index_count('index_todo_user_id'), 2)
+
+        item1.completion_time = datetime.datetime.now()
+        item1.save()
+
+        self.assertEqual(self.get_index_count('index_todo_user_id'), 2)
+
 if __name__ == '__main__':
     unittest.main()

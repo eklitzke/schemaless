@@ -84,9 +84,15 @@ class ColumnExpression(object):
         elif self.op == self.OP_LE:
             return self.name + ' <= %s', [self.rhs]
         elif self.op == self.OP_EQ:
-            return (self.name + ' = %s'), [self.rhs]
+            if self.rhs is None:
+                return '%s IS NULL' % self.name, []
+            else:
+                return (self.name + ' = %s'), [self.rhs]
         elif self.op == self.OP_NE:
-            return (self.name + ' != %s'), [self.rhs]
+            if self.rhs is None:
+                return '%s IS NOT NULL' % self.name, []
+            else:
+                return (self.name + ' != %s'), [self.rhs]
         elif self.op == self.OP_GT:
             return (self.name + ' > %s'), [self.rhs]
         elif self.op == self.OP_GE:

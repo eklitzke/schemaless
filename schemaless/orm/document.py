@@ -2,10 +2,13 @@ from collections import defaultdict
 from index import IndexCollection
 from schemaless.index import reduce_args
 from schemaless.log import ClassLogger
+from schemaless import c
+
+DEFAULT_NONCE = ()
 
 class Column(object):
 
-    def __init__(self, name, default=None, nullable=False, convert=None):
+    def __init__(self, name, default=DEFAULT_NONCE, nullable=False, convert=None):
         self.name = name
         self.default = default
         self.nullable = nullable
@@ -81,7 +84,7 @@ def make_base(session, meta_base=type, base_cls=object):
             # Add default values
             dict_keys = from_dict.keys()
             for c in self._columns:
-                if c.default is not None and c.name not in dict_keys:
+                if c.default != DEFAULT_NONCE and c.name not in dict_keys:
                     if callable(c.default):
                         v = c.default()
                     else:
@@ -119,13 +122,15 @@ def make_base(session, meta_base=type, base_cls=object):
         def from_datastore(cls, d):
             missing = cls._required_columns - set(d.keys())
             if missing:
-                raise ValueError('Missing the following keys: ' + ', '.join(k for k in sorted(missing)))
+                raise ValueError('Missing from %s the following keys: %s' % (d, ', '.join(k for k in sorted(missing))))
             for k, v in d.iteritems():
                 c = cls._column_map.get(k)
                 if c and c.convert:
                     d[k] = c.convert.from_db(v)
 
-            return cls(d, is_dirty=False)
+            obj = cls(d, is_dirty=False)
+            obj.updated = d['updated']
+            return obj
 
         def to_dict(self):
             d = {'id': self.id}
@@ -134,6 +139,8 @@ def make_base(session, meta_base=type, base_cls=object):
                     val = getattr(self, f)
                 elif hasattr(self, f):
                     val = getattr(self, f)
+                else:
+                    continue
                 if self._column_map[f].convert:
                     val = self._column_map[f].convert.to_db(val)
                 d[f] = val
@@ -149,10 +156,12 @@ def make_base(session, meta_base=type, base_cls=object):
                 raise ValueError('This object is not yet saveable, missing: %s' % (', '.join(str(k) for k in missing),))
             if self._schemaless_dirty:
                 obj = self._session.datastore.put(self.to_dict())
+                self.updated = obj['updated']
                 self._schemaless_id = obj['id']
                 self._schemaless_dirty = False
                 if clear_session and self in self._session.dirty_documents:
                     self._session.dirty_documents.remove(self)
+            return self
 
         def delete(self, clear_session=True):
             if not self._saveable():
@@ -192,6 +201,10 @@ def make_base(session, meta_base=type, base_cls=object):
         @classmethod
         def query(cls, *exprs, **kwargs):
             return cls._query(*exprs, **kwargs)
+
+        @classmethod
+        def all(cls):
+            return cls._query(c.entity_id != None)
 
         @classmethod
         def by_id(cls, id):

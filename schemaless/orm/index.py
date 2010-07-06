@@ -16,6 +16,10 @@ class Index(object):
         self.underlying = datastore.define_index(self.table_name, self.fields, match_on=match_on)
         return self.underlying
 
+    def __str__(self):
+        return '%s(%s)' % (self.__class__.__name__, self.underlying)
+    __repr__ = __str__
+
 class IndexCollection(object):
 
     log = ClassLogger()
@@ -43,6 +47,6 @@ class IndexCollection(object):
                 best = val
 
         best = best[-1]
-        self.log.debug('chose %s as best index for %s' % (best.underlying, fields))
+        self.log.debug('from %s chose %s as best index for %s' % (self.indexes, best, fields))
         self.answer_cache[fields] = best
         return best

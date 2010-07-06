@@ -17,6 +17,8 @@ class Index(object):
     def __init__(self, table, properties=[], match_on={}, shard_on=None, connection=None, use_zlib=True):
         if shard_on is not None:
             raise NotImplementedError
+        if any(',' in p for p in properties):
+            raise ValueError('Bad property name: %r' % (p,))
     
         self.table = table
         self.properties = frozenset(properties)
@@ -24,11 +26,15 @@ class Index(object):
         self.connection = connection
         self.use_zlib = use_zlib
 
+    def __str__(self):
+        return '%s(table=%s, properties=%s, match_on=%s)' % (self.__class__.__name__, self.table, self.properties, self.match_on)
+    __repr__ = __str__
+
     def __cmp__(self, other):
         return cmp(self.table, other.table)
 
     def matches(self, entity, keys):
-        if not self.properties <= keys:
+        if not (self.properties <= keys):
             return False
         for k, v in self.match_on.iteritems():
             if entity.get(k) != v:
@@ -40,7 +46,6 @@ class Index(object):
         return self._do_query(exprs, order_by, limit)
 
     def _do_query(self, exprs, order_by, limit):
-
         values = []
         where_clause = []
         for e in exprs:
@@ -82,3 +87,6 @@ class Index(object):
 
     def query(self, *exprs, **kwargs):
         return self._query(*exprs, **kwargs)
+
+    def all(self):
+        return self._query(c.entity_id != None)

@@ -15,8 +15,8 @@ class DateTimeConverter(Converter):
 
     @classmethod
     def to_db(cls, obj):
-        return time.mktime(obj.timetuple())
+        return time.mktime(obj.timetuple()) if obj else None
 
     @classmethod
     def from_db(cls, val):
-        return datetime.datetime.fromtimestamp(val)
+        return datetime.datetime.fromtimestamp(val) if val else None

@@ -71,7 +71,11 @@ class DataStore(object):
         q = 'INSERT INTO %s (%s) VALUES (' % (index.table, ', '.join(pnames))
         q += ', '.join('%s' for x in pnames)
         q += ')'
-        self.connection.execute(q, *vals)
+        try:
+            self.connection.execute(q, *vals)
+        except tornado.database.OperationalError:
+            self.log.exception('query = %s, vals = %s' % (q, vals))
+            raise
 
     def _update_index(self, index, entity_id, entity):
         try:
