@@ -271,5 +271,12 @@ class AutomaticORMTestCase(ORMTestCase):
         self.assert_equal(b, self.Business.get(c.city == b.city, c.state == b.state))
         self.assert_used_index(self.Business, 'index_00003_8e5e9c3d848aa30749151092bbff622d')
 
+    def test_all(self):
+        b = self.Business(business_id=schemaless.guid(), city='Oakland', state='CA').save()
+        assert not b.is_dirty
+
+        self.assert_len(1, self.Business.all())
+        self.assert_used_index(self.Business, 'entities')
+
 if __name__ == '__main__':
     unittest.main()

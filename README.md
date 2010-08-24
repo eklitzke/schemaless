@@ -14,6 +14,12 @@ schemaless is different:
  * There's an optional "ORM" (which isn't really relational) implemented as
    `schemaless.orm`. The "ORM" really is optional, and the interface described
    by FriendFeed is all usable and decoupled from the session/object stuff.
+ * The ORM is designed to be mostly declarative and easy to use. That means that
+   you can say, "I have have a document type `User`, and please can I have an
+   index on `(user_id)`, and I'd also like an index on `(first_name, last_name)`
+   please." The ORM will then create the necessary index tables and
+   automatically update them when you add new users; it will also know how to
+   pick the most specific index, given an arbitrary query.
 
 Basic Usage
 ===========
@@ -89,6 +95,8 @@ a query restriction that isn't fully covered by an index).
 
 Example
 -------
+
+*WARNING: all of the stuff below is old/bad, I'll update the docs soon*
 
 This example assumes the same MySQL tables as in the previous example:
 

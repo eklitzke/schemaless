@@ -19,8 +19,12 @@ class DataStore(object):
         if len(mysql_shards) > 1:
             raise NotImplementedError
         self.use_zlib = use_zlib
-        self.indexes = []
+        self.indexes = [Index('entities', ['tag'])]
         self.connection = tornado.database.Connection(host=mysql_shards[0], user=user, password=password, database=database)
+
+    @property
+    def tag_index(self):
+        return self.indexes[0]
 
     def define_index(self, table, properties=[], match_on={}, shard_on=None):
         idx = Index(table=table, properties=properties, match_on=match_on, shard_on=shard_on, connection=self.connection, use_zlib=self.use_zlib)
@@ -36,7 +40,7 @@ class DataStore(object):
             if idx.matches(entity, keys):
                 yield idx
     
-    def put(self, entity):
+    def put(self, entity, tag=None):
         is_update = False
         entity['updated'] = time.time()
         entity_id = None
@@ -59,9 +63,11 @@ class DataStore(object):
             self._put_update(entity_id, entity_copy, body)
             return entity
         else:
-            return self._put_new(entity_id, entity_copy, body)
+            return self._put_new(entity_id, entity_copy, tag, body)
 
     def _insert_index(self, index, entity_id, entity):
+        if index.table == 'entities':
+            return
         pnames = ['entity_id']
         vals = [entity_id]
         for p in index.properties:
@@ -94,8 +100,8 @@ class DataStore(object):
         except Exception:
             raise
 
-    def _put_new(self, entity_id, entity, body):
-        pk = self.connection.execute('INSERT INTO entities (id, updated, body) VALUES (%s, FROM_UNIXTIME(%s), %s)', entity_id, int(entity['updated']), body)
+    def _put_new(self, entity_id, entity, tag, body):
+        pk = self.connection.execute('INSERT INTO entities (id, updated, tag, body) VALUES (%s, FROM_UNIXTIME(%s), %s, %s)', entity_id, int(entity['updated']), tag, body)
         for idx in self._find_indexes(entity):
             self._insert_index(idx, entity_id, entity)
         return self.by_added_id(pk)

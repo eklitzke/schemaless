@@ -9,7 +9,7 @@ from schemaless.orm.column import Column, DEFAULT_NONCE
 from schemaless import c
 
 def _collect_fields(x):
-    return set((k, v) for k, v in x.__dict__.iteritems() if not k.startswith('_') and not callable(v))
+    return set((k, v) for k, v in x.__dict__.iteritems() if k != 'tag' and not k.startswith('_') and not callable(v))
 
 def make_base(session, meta_base=type, base_cls=object, tags_file=None, tags_db=None):
     """Create a base class for ORM documents.
@@ -27,20 +27,20 @@ def make_base(session, meta_base=type, base_cls=object, tags_file=None, tags_db=
     assert len(tags_db.keys()) == len(tags_db.values())
 
     if not tags_db and tags_file is not None:
-        yaml_cfg = yaml.open(tags_file)
+        yaml_cfg = yaml.load(open(tags_file, 'r').read())
         tags_db.update(yaml_cfg)
 
     class metacls(meta_base):
 
         def __new__(mcs, name, bases, cls_dict):
 
-            if '_tag' not in cls_dict and name in tags_db:
-                cls_dict['_tag'] = tags_db[name]
+            if 'tag' not in cls_dict and name in tags_db:
+                cls_dict['tag'] = tags_db[name]
 
-            if '_tag' in cls_dict:
-                if cls_dict['_tag'] in tags:
-                    raise TypeError('Tag %r has already been defined' % (cls_dict['_tag'],))
-                tags.add(cls_dict['_tag'])
+            if 'tag' in cls_dict:
+                if cls_dict['tag'] in tags:
+                    raise TypeError('Tag %r has already been defined' % (cls_dict['tag'],))
+                tags.add(cls_dict['tag'])
 
             s = set()
             for b in bases:
@@ -57,13 +57,15 @@ def make_base(session, meta_base=type, base_cls=object, tags_file=None, tags_db=
 
             if not '_abstract' in cls_dict:
                 cls_dict.setdefault('_indexes', [])
-                indexes = []
+                tag_index = Index('entities', ['tag'])
+                tag_index.underlying = session.datastore.tag_index
+                indexes = [tag_index]
                 for idx in cls_dict.get('_indexes', []):
                     if isinstance(idx, Index):
                         indexes.append(idx)
-                    elif cls_dict.get('_tag') and is_type_list(basestring, idx):
+                    elif cls_dict.get('tag') and is_type_list(basestring, idx):
                         cols = [cls_dict['_column_map'][name] for name in idx]
-                        indexes.append(Index.automatic(cls_dict['_tag'], cols, session.datastore, declare=False))
+                        indexes.append(Index.automatic(cls_dict['tag'], cols, session.datastore, declare=False))
                     else:
                         raise ValueError("Sorry, I don't know how to make an index for %s from %r" % (name, idx))
                 cls_dict['_indexes'] = indexes
@@ -79,7 +81,7 @@ def make_base(session, meta_base=type, base_cls=object, tags_file=None, tags_db=
         __metaclass__ = metacls
 
         _abstract = True
-        _columns = [Column('_tag')]
+        _columns = [Column('tag')]
         _indexes = []
         _id_field = None
 
@@ -93,12 +95,12 @@ def make_base(session, meta_base=type, base_cls=object, tags_file=None, tags_db=
             if from_dict is None:
                 from_dict = kwargs
 
-            if hasattr(self, '_tag') and '_tag' in from_dict:
-                if getattr(self, '_tag') != from_dict['_tag']:
+            if hasattr(self, 'tag') and 'tag' in from_dict:
+                if getattr(self, 'tag') != from_dict['tag']:
                     raise TypeError('Inconsistent tag')
             
             # FIXME: ought to grab other attributes off the class dict as well
-            self.__dict__['_schemaless_collected_fields'] = set(['_tag'])
+            self.__dict__['_schemaless_collected_fields'] = set(['tag'])
             self.__dict__['_schemaless_id'] = from_dict.get('id', None)
 
             for k, v in from_dict.iteritems():
@@ -180,7 +182,7 @@ def make_base(session, meta_base=type, base_cls=object, tags_file=None, tags_db=
                 missing = self._required_columns - self._schemaless_collected_fields
                 raise ValueError('This object is not yet saveable, missing: %s' % (', '.join(str(k) for k in missing),))
             if self._schemaless_dirty:
-                obj = self._session.datastore.put(self.to_dict())
+                obj = self._session.datastore.put(self.to_dict(), self.tag)
                 self.updated = obj['updated']
                 self._schemaless_id = obj['id']
                 self._schemaless_dirty = False
@@ -204,6 +206,9 @@ def make_base(session, meta_base=type, base_cls=object, tags_file=None, tags_db=
             idx = cls._schemaless_index_collection.best_index(columns)
             cls._last_index_used = idx
             using = idx.field_set & columns
+
+            if not using:
+                raise ValueError('cannot do this query, no indexes can be used')
 
             query_exprs = [e for e in exprs if e.name in using]
             result = idx.underlying._do_query(query_exprs, order_by, limit)
@@ -230,18 +235,18 @@ def make_base(session, meta_base=type, base_cls=object, tags_file=None, tags_db=
 
         @classmethod
         def all(cls):
-            return cls._query(c.entity_id != None)
+            return cls._query(c.tag == cls.tag)
 
         @classmethod
         def by_id(cls, id):
             entity = cls._session.datastore.by_id(id)
             if not entity:
                 return entity
-            if entity._tag != cls._tag:
-                raise ValueError('Entity had tag %r, our class has tag %r' % (entity._tag, cls._tag))
+            if entity.tag != cls.tag:
+                raise ValueError('Entity had tag %r, our class has tag %r' % (entity.tag, cls.tag))
             return cls.from_datastore(entity)
 
         def __eq__(self, other):
-            return type(self) is type(other) and _collect_fields(self) == _collect_fields(other)
+            return self.__class__ is type(other) and _collect_fields(self) == _collect_fields(other)
 
     return Document

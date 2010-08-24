@@ -19,7 +19,7 @@ class Index(object):
             raise NotImplementedError
         if any(',' in p for p in properties):
             raise ValueError('Bad property name: %r' % (p,))
-    
+
         self.table = table
         self.properties = frozenset(properties)
         self.match_on = match_on
@@ -40,7 +40,7 @@ class Index(object):
             if entity.get(k) != v:
                 return False
         return True
-    
+
     def _query(self, *exprs, **kwargs):
         exprs, order_by, limit = reduce_args(*exprs, **kwargs)
         return self._do_query(exprs, order_by, limit)
@@ -55,25 +55,35 @@ class Index(object):
             where_clause.append(expr_string)
             values.extend(vals)
 
-        q = 'SELECT entity_id FROM %s WHERE ' % self.table
-        q += ' AND '.join(where_clause)
-        if order_by:
-            q += ' ORDER BY %s' % (order_by,)
-        if limit:
-            q += ' LIMIT %d' % (limit,)
-
-        rows = self.connection.query(*([q] + values))
-
-        if rows:
-            entity_ids = [r['entity_id'] for r in rows]
-            q = 'SELECT * FROM entities WHERE id IN ('
-            q += ', '.join('%s' for x in rows)
-            q += ')'
-            entity_rows = self.connection.query(*([q] + entity_ids))
-            entity_rows.sort(key = lambda x: x['added_id'])
-            return [Entity.from_row(row, use_zlib=self.use_zlib) for row in entity_rows]
+        if self.table == 'entities':
+            # XXX: this is a bit hacky
+            q = 'SELECT * FROM entities WHERE ' + ' AND '.join(where_clause)
+            if order_by:
+                q += ' ORDER BY %s' % (order_by,)
+            if limit:
+                q += ' LIMIT %d' % (limit,)
+            entity_rows = self.connection.query(q, *values)
         else:
-            return []
+            q = 'SELECT entity_id FROM %s WHERE ' % self.table
+            q += ' AND '.join(where_clause)
+            if order_by:
+                q += ' ORDER BY %s' % (order_by,)
+            if limit:
+                q += ' LIMIT %d' % (limit,)
+
+            rows = self.connection.query(*([q] + values))
+
+            if rows:
+                entity_ids = [r['entity_id'] for r in rows]
+                q = 'SELECT * FROM entities WHERE id IN ('
+                q += ', '.join('%s' for x in rows)
+                q += ')'
+                entity_rows = self.connection.query(q, *entity_ids)
+            else:
+                return []
+
+        entity_rows.sort(key = lambda x: x['added_id'])
+        return [Entity.from_row(row, use_zlib=self.use_zlib) for row in entity_rows]
 
     def get(self, *exprs, **kwargs):
         kwargs['limit'] = 1
