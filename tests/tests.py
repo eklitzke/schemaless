@@ -22,6 +22,13 @@ class TestBase(unittest.TestCase):
     def assert_len(self, a, b):
         return self.assertEqual(a, len(b))
 
+    def assert_used_index(self, document_cls, name):
+        index = getattr(document_cls, '_last_index_used', None)
+        if index is None:
+            return False
+        if index.table_name != name:
+            self.assert_(False, 'Expected to use index %s but actually used %s' % (name, index.table_name))
+
 class SchemalessTestCase(TestBase):
 
     def setUp(self):
@@ -148,26 +155,31 @@ class SchemalessORMTestCase(ORMTestCase):
         self.session.save()
 
         fetched_users = self.User.query(c.user_id.in_(user_ids[:3]))
+        self.assert_used_index(self.User, 'index_user_id')
         self.assert_equal(set(user_ids[:3]), set(u.user_id for u in users[:3]))
 
     def test_name_query(self):
         u = self.User(user_id=schemaless.guid(), first_name='foo', last_name='bar')
         u.save()
         v = self.User.get(c.first_name == 'foo', c.last_name == 'bar')
+        self.assert_used_index(self.User, 'index_user_name')
         self.assert_equal(u.user_id, v.user_id)
 
     def test_update(self):
         u = self.User(user_id=schemaless.guid(), first_name='foo', last_name='bar')
         u.save()
         v = self.User.get(c.first_name == 'foo', c.last_name == 'bar')
+        self.assert_used_index(self.User, 'index_user_name')
         self.assert_equal(u.id, v.id)
         self.assert_equal(u.user_id, v.user_id)
 
         u.first_name = 'baz'
         u.save()
         v = self.User.get(c.first_name == 'foo', c.last_name == 'bar')
+        self.assert_used_index(self.User, 'index_user_name')
         self.assert_equal(None, v)
         v = self.User.get(c.first_name == 'baz', c.last_name == 'bar')
+        self.assert_used_index(self.User, 'index_user_name')
         self.assert_equal(u.id, v.id)
         self.assert_equal(u.user_id, v.user_id)
 
@@ -250,16 +262,14 @@ class AutomaticORMTestCase(ORMTestCase):
         self.Business = Business
 
     def test_querying(self):
-        b = self.Business()
-        b.business_id = schemaless.guid()
-        b.city = 'Oakland'
-        b.state = 'CA'
-        b.save()
+        b = self.Business(business_id=schemaless.guid(), city='Oakland', state='CA').save()
         assert not b.is_dirty
 
         self.assert_equal(b, self.Business.get(c.business_id == b.business_id))
-        self.assert_equal(b, self.Business.get(c.city == b.city, c.state == b.state))
+        self.assert_used_index(self.Business, 'index_00003_850f22a7c399fd1483275d62703d49de')
 
+        self.assert_equal(b, self.Business.get(c.city == b.city, c.state == b.state))
+        self.assert_used_index(self.Business, 'index_00003_8e5e9c3d848aa30749151092bbff622d')
 
 if __name__ == '__main__':
     unittest.main()

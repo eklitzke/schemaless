@@ -202,6 +202,7 @@ def make_base(session, meta_base=type, base_cls=object, tags_file=None, tags_db=
             exprs, order_by, limit = reduce_args(*exprs, **kwargs)
             columns = set(e.name for e in exprs)
             idx = cls._schemaless_index_collection.best_index(columns)
+            cls._last_index_used = idx
             using = idx.field_set & columns
 
             query_exprs = [e for e in exprs if e.name in using]
