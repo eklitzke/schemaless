@@ -1,3 +1,4 @@
+import yaml
 from collections import defaultdict
 from index import IndexCollection
 from schemaless.index import reduce_args
@@ -14,13 +15,31 @@ class Column(object):
         self.nullable = nullable
         self.convert = convert
 
-def make_base(session, meta_base=type, base_cls=object):
+def make_base(session, meta_base=type, base_cls=object, tags_file=None, tags_db=None):
+    """Create a base class for ORM documents.
 
+    meta_base -- the base class for metaclass
+    base_cls -- the base class for the document class
+    tags_file -- the path of a YAML file containing tags declarations
+    tags_db -- an explicit maping (as a dict) or tags declarations
+    """
+
+    # tags that have been registered
     tags = set()
+
+    tags_db = tags_db or {}
+    assert len(tags_db.keys()) == len(tags_db.values())
+
+    if not tags_db and tags_file is not None:
+        yaml_cfg = yaml.open(tags_file)
+        tags_db.update(yaml_cfg)
 
     class metacls(meta_base):
 
         def __new__(mcs, name, bases, cls_dict):
+
+            if '_tag' not in cls_dict and name in tags_db:
+                cls_dict['_tag'] = tags_db[name]
 
             if '_tag' in cls_dict:
                 if cls_dict['_tag'] in tags:

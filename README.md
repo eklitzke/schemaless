@@ -93,7 +93,7 @@ Example
 This example assumes the same MySQL tables as in the previous example:
 
     import schemaless
-	import schemaless.orm
+    import schemaless.orm
     from schemaless import c
     
     datastore = schemaless.DataStore(mysql_shards=['localhost:3306'], user='foo', password='foo', database='foo')
