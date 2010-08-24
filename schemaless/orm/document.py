@@ -3,17 +3,13 @@ from collections import defaultdict
 from index import IndexCollection
 from schemaless.index import reduce_args
 from schemaless.log import ClassLogger
+from schemaless.orm.util import is_type_list
+from schemaless.orm.index import Index
+from schemaless.orm.column import Column, DEFAULT_NONCE
 from schemaless import c
 
-DEFAULT_NONCE = ()
-
-class Column(object):
-
-    def __init__(self, name, default=DEFAULT_NONCE, nullable=False, convert=None):
-        self.name = name
-        self.default = default
-        self.nullable = nullable
-        self.convert = convert
+def _collect_fields(x):
+    return set((k, v) for k, v in x.__dict__.iteritems() if not k.startswith('_') and not callable(v))
 
 def make_base(session, meta_base=type, base_cls=object, tags_file=None, tags_db=None):
     """Create a base class for ORM documents.
@@ -61,8 +57,18 @@ def make_base(session, meta_base=type, base_cls=object, tags_file=None, tags_db=
 
             if not '_abstract' in cls_dict:
                 cls_dict.setdefault('_indexes', [])
-                cls_dict['_schemaless_index_collection'] = IndexCollection(cls_dict['_indexes'])
-                for idx in cls_dict['_indexes']:
+                indexes = []
+                for idx in cls_dict.get('_indexes', []):
+                    if isinstance(idx, Index):
+                        indexes.append(idx)
+                    elif cls_dict.get('_tag') and is_type_list(basestring, idx):
+                        cols = [cls_dict['_column_map'][name] for name in idx]
+                        indexes.append(Index.automatic(cls_dict['_tag'], cols, session.datastore, declare=False))
+                    else:
+                        raise ValueError("Sorry, I don't know how to make an index for %s from %r" % (name, idx))
+                cls_dict['_indexes'] = indexes
+                cls_dict['_schemaless_index_collection'] = IndexCollection(indexes)
+                for idx in indexes:
                     idx.declare(session.datastore)
 
             cls_dict['_session'] = session
@@ -233,5 +239,8 @@ def make_base(session, meta_base=type, base_cls=object, tags_file=None, tags_db=
             if entity._tag != cls._tag:
                 raise ValueError('Entity had tag %r, our class has tag %r' % (entity._tag, cls._tag))
             return cls.from_datastore(entity)
+
+        def __eq__(self, other):
+            return type(self) is type(other) and _collect_fields(self) == _collect_fields(other)
 
     return Document

@@ -73,7 +73,8 @@ class ORMTestCase(TestBase):
 
         tags_db = {
             'User': 1,
-            'ToDo': 2 }
+            'ToDo': 2,
+            'Business': 3}
 
         self.session = orm.Session(datastore)
         self.base_class = orm.make_base(self.session, tags_db=tags_db)
@@ -232,6 +233,33 @@ class ManyToOneORMTestCase(ORMTestCase):
         item1.save()
 
         self.assert_equal(self.get_index_count('index_todo_user_id'), 2)
+       
+class AutomaticORMTestCase(ORMTestCase):
+    """Test ORM documents with automatic indexes."""
+
+    def setUp(self):
+        super(AutomaticORMTestCase, self).setUp()
+
+        class Business(self.base_class):
+            _columns = [orm.Char('business_id', 32),
+                        orm.Varchar('city', 255),
+                        orm.Char('state', 2)]
+            _indexes = [('business_id',),
+                        ('city', 'state')]
+
+        self.Business = Business
+
+    def test_querying(self):
+        b = self.Business()
+        b.business_id = schemaless.guid()
+        b.city = 'Oakland'
+        b.state = 'CA'
+        b.save()
+        assert not b.is_dirty
+
+        self.assert_equal(b, self.Business.get(c.business_id == b.business_id))
+        self.assert_equal(b, self.Business.get(c.city == b.city, c.state == b.state))
+
 
 if __name__ == '__main__':
     unittest.main()
