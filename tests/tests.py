@@ -9,7 +9,11 @@ from schemaless import c
 class TestBase(unittest.TestCase):
 
     def clear_tables(self, datastore):
-        for tbl in ['entities', 'index_user_id', 'index_user_name', 'index_foo', 'index_birthdate', 'index_todo_user_id', 'index_todo_user_id_time']:
+        tables = set()
+        for d in datastore.connection.query('SHOW TABLES'):
+            for v in d.itervalues():
+                tables.add(v)
+        for tbl in tables:
             datastore.connection.execute('DELETE FROM %s' % (tbl,))
 
     def assert_equal(self, a, b):
