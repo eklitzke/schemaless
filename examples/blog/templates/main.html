@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+
+{% block body %}
+<h1>Schemaless Blog</h1>
+<a class="secret" href="/post">click here to write a new post</a>
+{% for post in posts %}
+  <h2>{{escape(post.title)}}</h2>
+  <div class="datetime">{{post.time_created.strftime('%Y-%m-%d %H:%M')}}</div>
+  <div class="post_content">
+  {{post.content}} {% comment unescaped!!! %}
+  </div>
+  {% if post.comments %}
+  <h3>Comments</h3>
+  {% for comment in post.comments %}
+  <div class="comment_box">
+  <span class="author">{{escape(comment.author)}}</span> (<span class="datetime">{{comment.time_created.strftime('%Y-%m-%d %H:%M')}}</span>):
+  <div class="comment_content">
+  {{escape(comment.content)}}
+  </div>
+  </div>
+  {% end %}
+  {% end %}
+  <form action="/comment" method="POST">
+    <fieldset>
+      <legend>Leave a Comment</legend>
+      {{xsrf_form_html()}}
+      <input type="hidden" name="post_id" value="{{post.post_id}}">
+      <label for="author">Your Name: </label>
+      <input id="author" name="author" type="text"><br>
+      <textarea cols=60 rows=3 name="content"></textarea><br>
+      <input type="submit">
+    </fieldset>
+  </form>
+{% end %}
+{% end %}

@@ -96,38 +96,10 @@ a query restriction that isn't fully covered by an index).
 Example
 -------
 
-*WARNING: all of the stuff below is old/bad, I'll update the docs soon*
-
-This example assumes the same MySQL tables as in the previous example:
-
-    import schemaless
-    import schemaless.orm
-    from schemaless import c
-    
-    datastore = schemaless.DataStore(mysql_shards=['localhost:3306'], user='foo', password='foo', database='foo')
-    session = schemaless.orm.Session(datastore)
-    Base = schemaless.orm.make_base(self.session)
-    
-    class User(Base):
-        _tag = 1
-        _persist = ['user_id', 'first_name', 'last_name']
-        _optional = ['age', 'favorite_color']
-        _indexes = [schemaless.orm.Index('index_user_id', ['user_id']),
-                    schemaless.orm.Index('index_user_name', ['first_name', last_name'])]
-    
-    user = User(user_id=schemaless.guid(), first_name='evan', last_name='klitzke', age=23)
-    user.save()
-    
-    # knows to just use 'index_user_id'
-    queried_user = User.get(c.user_id == user.user_id)
-    assert user == queried_user
-    
-    # internally, this figures out that 'index_user_name' matches on the most
-    # columns, and uses that index to fetch rows; after the rows are fetched the
-    # expressions are re-run on the fetched rows to validate the accuracy of
-    # first_name/last_name, and to do the age filtering
-    queried_user = User.get(c.first_name == 'evan', c.last_name == 'klitzke', c.age < 100)
-    assert user == queried_user
+The best way to get a feel for the ORM is to look at the example in
+`examples/blog/main.py`. This is the implementation of a trivial "blog"
+application that uses Schemaless and Tornado. It's only about a hundred lines of
+code, and shows a few different working parts interacting together.
 
 Adding Indexes
 ==============

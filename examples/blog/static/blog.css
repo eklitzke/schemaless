@@ -1,0 +1,12 @@
+h1 { font-weight: bold; font-size: 150%; }
+h2 { font-weight: bold; font-size: 120%; }
+h3 { font-weight: bold; font-size: 110%; }
+
+#bd { margin: 1em; max-width: 600px; }
+
+fieldset { border: 1px solid black; padding: 0.5em; }
+legend { font-style: italic; }
+.datetime { font-style: italic; }
+.comment_box { padding: 0.5em; }
+.secret { color: #777; }
+a { color: inherit; }

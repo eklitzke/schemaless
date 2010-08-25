@@ -64,7 +64,7 @@ class Index(object):
     def declare(self, datastore, tag=None):
         match_on = {}
         if tag is not None:
-            match_on = {'_tag': tag}
+            match_on = {'tag': tag}
         self.underlying = datastore.define_index(self.table_name, self.fields, match_on=match_on)
         return self.underlying
 

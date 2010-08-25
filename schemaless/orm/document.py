@@ -71,7 +71,7 @@ def make_base(session, meta_base=type, base_cls=object, tags_file=None, tags_db=
                 cls_dict['_indexes'] = indexes
                 cls_dict['_schemaless_index_collection'] = IndexCollection(indexes)
                 for idx in indexes:
-                    idx.declare(session.datastore)
+                    idx.declare(session.datastore, tag=cls_dict['tag'])
 
             cls_dict['_session'] = session
             return meta_base.__new__(mcs, name, bases, cls_dict)
@@ -147,6 +147,8 @@ def make_base(session, meta_base=type, base_cls=object, tags_file=None, tags_db=
 
         @classmethod
         def from_datastore(cls, d):
+            if d['tag'] != cls.tag:
+                raise ValueError('Expected item with tag %d, instead got item with tag %d' % (cls.tag, d['tag']))
             missing = cls._required_columns - set(d.keys())
             if missing:
                 raise ValueError('Missing from %s the following keys: %s' % (d, ', '.join(k for k in sorted(missing))))

@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+
+{% block body %}
+<a href="/">return to blog</a>
+<form action="/post" method="POST">
+  <fieldset>
+    <legend>new post</legend>
+    {{xsrf_form_html()}}
+    <label for="title">title: </label>
+    <input type="text" name="title" id="title"> <br>
+    <textarea cols=80 rows=5 id="post_content" name="content"></textarea> <br>
+    <input type="submit">
+  </fieldset>
+</form>
+{% end %}

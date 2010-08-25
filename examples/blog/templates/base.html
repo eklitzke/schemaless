@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>{{escape(title)}}</title>
+    <link rel="stylesheet" type="text/css" href="http://yui.yahooapis.com/3.1.2/build/cssreset/reset-min.css">
+    <link rel="stylesheet" type="text/css" href="{{static_url('blog.css')}}">
+  </head>
+  <body>
+    <div id="bd">
+    {% block body %}{% end %}
+    </div>
+  </body>
+</html>
