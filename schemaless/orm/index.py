@@ -29,9 +29,7 @@ class Index(object):
         field_hash = hashlib.md5(field_string).hexdigest()
         table_name = 'index_%05d_%s' % (tag, field_hash)
 
-        row = datastore.connection.get('SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = %s', table_name)
-        count = row.values()[0]
-        if count == 0:
+        if not datastore.check_table_exists(table_name):
             cls.log.info('Creating %s' % (table_name,))
             sql = ['CREATE TABLE %s (' % (table_name,)]
             for f in fields:

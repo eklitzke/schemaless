@@ -13,7 +13,7 @@ class DataStore(object):
 
     log = ClassLogger()
 
-    def __init__(self, mysql_shards=[], user=None, database=None, password=None, use_zlib=True, indexes=[]):
+    def __init__(self, mysql_shards=[], user=None, database=None, password=None, use_zlib=True, indexes=[], create_entities=True):
         if not mysql_shards:
             raise ValueError('Must specify at least one MySQL shard')
         if len(mysql_shards) > 1:
@@ -21,6 +21,8 @@ class DataStore(object):
         self.use_zlib = use_zlib
         self.indexes = [Index('entities', ['tag'])]
         self.connection = tornado.database.Connection(host=mysql_shards[0], user=user, password=password, database=database)
+        if create_entities and not self.check_table_exists('entities'):
+            self.create_entities_table()
 
     @property
     def tag_index(self):
@@ -104,7 +106,7 @@ class DataStore(object):
         pk = self.connection.execute('INSERT INTO entities (id, updated, tag, body) VALUES (%s, FROM_UNIXTIME(%s), %s, %s)', entity_id, int(entity['updated']), tag, body)
         for idx in self._find_indexes(entity):
             self._insert_index(idx, entity_id, entity)
-        return self.by_added_id(pk)
+        return self.by_id(entity_id)
 
     def _put_update(self, entity_id, entity, body):
         self.connection.execute('UPDATE entities SET updated = CURRENT_TIMESTAMP, body = %s WHERE id = %s', body, entity_id)
@@ -122,13 +124,18 @@ class DataStore(object):
                 return 0
         entity_id = entity['id'].decode('hex')
 
-        def _delete(table_name, col):
+        def _delete(table_name):
+            col = 'id' if table_name == 'entities' else 'entity_id'
             return int(bool(self.connection.execute('DELETE FROM %s WHERE %s = %%s' % (table_name, col), entity_id)))
 
         deleted = 0
+        seen_entities = False
         for idx in self._find_indexes(entity):
-            deleted += _delete(idx.table, 'entity_id')
-        deleted += _delete('entities', 'id')
+            if idx.table == 'entities':
+                seen_entities = True
+            deleted += _delete(idx.table)
+        if not seen_entities:
+            deleted += _delete('entities')
         return deleted
 
     def by_id(self, id):
@@ -137,6 +144,17 @@ class DataStore(object):
         row = self.connection.get('SELECT * FROM entities WHERE id = %s', id)
         return Entity.from_row(row, use_zlib=self.use_zlib) if row else None
 
-    def by_added_id(self, added_id):
-        row = self.connection.get('SELECT * FROM entities WHERE added_id = %s', added_id)
-        return Entity.from_row(row, use_zlib=self.use_zlib)
+    def check_table_exists(self, table_name):
+        row = self.connection.get('SELECT COUNT(*) AS tbl_count FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = %s', table_name)
+        return bool(row['tbl_count'])
+
+    def create_entities_table(self):
+        self.connection.execute("""
+            CREATE TABLE entities (
+                id BINARY(16) NOT NULL,
+                updated TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                tag MEDIUMINT,
+                body MEDIUMBLOB NOT NULL,
+                PRIMARY KEY (id),
+                KEY (updated)
+            ) ENGINE=InnoDB""")

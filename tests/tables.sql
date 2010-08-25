@@ -1,13 +1,3 @@
-CREATE TABLE IF NOT EXISTS `entities` (
-  `added_id` int(11) NOT NULL AUTO_INCREMENT,
-  `id` binary(16) NOT NULL,
-  `updated` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `body` mediumblob,
-  PRIMARY KEY (`added_id`),
-  UNIQUE KEY `id` (`id`),
-  KEY `updated` (`updated`)
-) ENGINE=InnoDB;
-
 CREATE TABLE IF NOT EXISTS `index_birthdate` (
   `entity_id` binary(16) NOT NULL,
   `birthdate` varchar(64) NOT NULL DEFAULT '',

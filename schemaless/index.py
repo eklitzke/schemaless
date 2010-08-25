@@ -82,7 +82,7 @@ class Index(object):
             else:
                 return []
 
-        entity_rows.sort(key = lambda x: x['added_id'])
+        entity_rows.sort(key = lambda x: x['updated'])
         return [Entity.from_row(row, use_zlib=self.use_zlib) for row in entity_rows]
 
     def get(self, *exprs, **kwargs):
