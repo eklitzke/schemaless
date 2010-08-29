@@ -1,14 +1,32 @@
 from schemaless.column import ColumnExpression, Entity
 
+class Order(object):
+
+    def __init__(self, name, asc=False, desc=False):
+        self.name = name
+        self.order = 'ASC' if asc else 'DESC'
+
 def reduce_args(*exprs, **kwargs):
     limit = kwargs.pop('limit', None)
     order_by = kwargs.pop('order_by', None)
+    asc = kwargs.pop('asc', False)
+    desc = kwargs.pop('desc', False)
+    if asc and desc:
+        raise ValueError('Cannot specify both asc=True and desc=True')
+    if order_by:
+        if not (asc or desc):
+            asc = True
+        order_by = Order(order_by, asc=asc, desc=desc)
 
     exprs = list(exprs)
     for k, v in kwargs.iteritems():
-        exprs.append(ColumnExpression(k, ColumnExpression.EQ, v))
+        exprs.append(ColumnExpression(k, ColumnExpression.OP_EQ, v))
 
-    if not exprs:
+    # if it's just an order_by, check for the order_by column not nulll
+    #if order_by and not exprs:
+    #    exprs.append(ColumnExpression(order_by.name, ColumnExpression.OP_NE, None))
+
+    if not (order_by or exprs):
         raise ValueError('Must provide args/kwargs for a WHERE clause')
     return exprs, order_by, limit
 
@@ -59,20 +77,20 @@ class Index(object):
             # XXX: this is a bit hacky
             q = 'SELECT * FROM entities WHERE ' + ' AND '.join(where_clause)
             if order_by:
-                q += ' ORDER BY %s' % (order_by,)
+                q += ' ORDER BY %s %s' % (order_by.name, order_by.order)
             if limit:
                 q += ' LIMIT %d' % (limit,)
             entity_rows = self.connection.query(q, *values)
         else:
-            q = 'SELECT entity_id FROM %s WHERE ' % self.table
-            q += ' AND '.join(where_clause)
+            q = 'SELECT entity_id FROM %s' % self.table
+            if where_clause:
+                q += 'WHERE ' + ' AND '.join(where_clause)
             if order_by:
-                q += ' ORDER BY %s' % (order_by,)
+                q += ' ORDER BY %s %s' % (order_by.name, order_by.order)
             if limit:
                 q += ' LIMIT %d' % (limit,)
 
-            rows = self.connection.query(*([q] + values))
-
+            rows = self.connection.query(q, *values)
             if rows:
                 entity_ids = [r['entity_id'] for r in rows]
                 q = 'SELECT * FROM entities WHERE id IN ('
@@ -82,8 +100,21 @@ class Index(object):
             else:
                 return []
 
-        entity_rows.sort(key = lambda x: x['updated'])
-        return [Entity.from_row(row, use_zlib=self.use_zlib) for row in entity_rows]
+        if not order_by:
+            #sorted_entities = sorted(entity_rows, key=lambda x: x['updated'], reverse=True)
+            sorted_entities = sorted(entity_rows, key=lambda x: x['updated'])
+        else:
+            # XXX: this is O(n^2), bad
+            sorted_entities = []
+            for row_id in (row['entity_id'] for row in rows):
+                for e in entity_rows:
+                    if e['id'] == row_id:
+                        sorted_entities.append(e)
+                        break
+                else:
+                    assert False
+
+        return [Entity.from_row(row, use_zlib=self.use_zlib) for row in sorted_entities]
 
     def get(self, *exprs, **kwargs):
         kwargs['limit'] = 1

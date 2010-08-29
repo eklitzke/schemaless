@@ -19,43 +19,48 @@ class Column(object):
             s += ' NOT NULL'
         return s
 
-class Char(Column):
+class CHAR(Column):
 
     def __init__(self, name, length, **kwargs):
-        super(Char, self).__init__(name, **kwargs)
+        super(CHAR, self).__init__(name, **kwargs)
         self.length = length
 
     def to_string(self):
         return 'CHAR(%d)' % (self.length,)
 
-class Binary(Column):
+class BINARY(Column):
 
     def __init__(self, name, length, **kwargs):
-        super(Binary, self).__init__(name, **kwargs)
+        super(BINARY, self).__init__(name, **kwargs)
         self.length = length
 
     def to_string(self):
         return 'BINARY(%d)' % (self.length,)
 
-class Varchar(Column):
+class VARCHAR(Column):
     def __init__(self, name, length, **kwargs):
-        super(Varchar, self).__init__(name, **kwargs)
+        super(VARCHAR, self).__init__(name, **kwargs)
         self.length = length
 
     def to_string(self):
         return 'VARCHAR(%d)' % (self.length,)
 
-class Text(Column):
+class TEXT(Column):
 
     def to_string(self):
         return 'TEXT'
 
-class DateTime(Column):
+class DATETIME(Column):
 
     def __init__(self, name, **kwargs):
         if not kwargs.get('convert'):
             kwargs['convert'] = schemaless.orm.converters.DateTimeConverter
-        super(DateTime, self).__init__(name, **kwargs)
+        super(DATETIME, self).__init__(name, **kwargs)
 
     def to_string(self):
         return 'INTEGER UNSIGNED'
+
+class GUID(CHAR):
+
+    def __init__(self, name, **kwargs):
+        super(GUID, self).__init__(name, 32, **kwargs)

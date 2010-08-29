@@ -22,13 +22,12 @@ Base = orm.make_base(session, tags_file=os.path.join(dirname, 'tags.yaml'))
 
 class Post(Base):
     _columns = [
-        orm.Char('post_id', 32, nullable=False),
-        orm.Varchar('title', 255, nullable=False),
-        orm.Text('content', nullable=False),
-        orm.DateTime('time_created', default=datetime.datetime.now)
+        orm.VARCHAR('title', 255, nullable=False),
+        orm.TEXT('content', nullable=False),
+        orm.DATETIME('time_created', default=datetime.datetime.now)
         ]
 
-    _indexes = [['post_id'], ['time_created']]
+    _indexes = [['time_created']]
 
     @classmethod
     def new_post(cls, title, content):
@@ -38,20 +37,19 @@ class Post(Base):
     def comments(self):
         """Get all the comments for this post, ordered by time created."""
         if not hasattr(self, '_comments'):
-            comments = Comment.query(c.post_id == self.post_id)
+            comments = Comment.query(c.post_id == self.id)
             self._comments = sorted(comments, key=lambda c: c.time_created)
         return self._comments
 
 class Comment(Base):
     _columns = [
-        orm.Char('comment_id', 32, nullable=False),
-        orm.Char('post_id', 32, nullable=False),
-        orm.Varchar('author', 255),
-        orm.Text('content', nullable=False),
-        orm.DateTime('time_created', default=datetime.datetime.now)
+        orm.GUID('post_id', 32, nullable=False),
+        orm.VARCHAR('author', 255),
+        orm.TEXT('content', nullable=False),
+        orm.DATETIME('time_created', default=datetime.datetime.now)
         ]
 
-    _indexes = [['comment_id'], ['post_id']]
+    _indexes = [['comment_id']]
 
     @classmethod
     def reply(cls, post_id, author, content):
