@@ -1,3 +1,5 @@
+**Disclaimer: this is alpha-quality code, and the API is not yet stable**
+
 Introduction
 ============
 
