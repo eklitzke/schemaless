@@ -53,7 +53,7 @@ def make_base(session, meta_base=type, base_cls=object, tags_file=None, tags_db=
             cls_dict['_columns'] = s
             cls_dict['_column_map'] = dict((c.name, c) for c in s)
             cls_dict['_column_names'] = frozenset(c.name for c in s)
-            cls_dict['_required_columns'] = frozenset(c.name for c in s if not c.nullable)
+            cls_dict['_required_columns'] = frozenset(c.name for c in s if c.required)
 
             if not '_abstract' in cls_dict:
                 cls_dict.setdefault('_indexes', [])

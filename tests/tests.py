@@ -100,10 +100,10 @@ class SchemalessORMTestCase(ORMTestCase):
         super(SchemalessORMTestCase, self).setUp()
 
         class User(self.base_class):
-            _columns = [orm.Column('user_id'),
-                        orm.Column('first_name'),
-                        orm.Column('last_name'),
-                        orm.Column('birthdate', nullable=True),
+            _columns = [orm.Column('user_id', required=True),
+                        orm.Column('first_name', required=True),
+                        orm.Column('last_name', required=True),
+                        orm.Column('birthdate'),
                         orm.Column('time_created', default=datetime.datetime.now, convert=schemaless.orm.converters.DateTimeConverter)]
             _indexes = [orm.Index('index_user_id', ['user_id']),
                         orm.Index('index_birthdate', ['birthdate']),
@@ -224,7 +224,7 @@ class ManyToOneORMTestCase(ORMTestCase):
         class ToDo(self.base_class):
             _columns = [orm.Column('user_id'),
                         orm.Column('action'),
-                        orm.Column('completion_time', default=None, nullable=True, convert=schemaless.orm.converters.DateTimeConverter)]
+                        orm.Column('completion_time', default=None, convert=schemaless.orm.converters.DateTimeConverter)]
             _indexes = [orm.Index('index_todo_user_id', ['user_id'])]
                         #orm.Index('index_todo_user_id_time', ['user_id', 'completion_time'])]
 
@@ -254,15 +254,19 @@ class AutomaticORMTestCase(ORMTestCase):
 
         class Business(self.base_class):
             _columns = [orm.Char('business_id', 32),
-                        orm.Varchar('city', 255),
-                        orm.Char('state', 2)]
+                        orm.String('city', 255),
+                        orm.Char('state', 2),
+                        orm.Bool('active', default=True)]
             _indexes = [('business_id',),
                         ('city', 'state')]
 
         self.Business = Business
 
+    def add_biz(self, city='Oakland', state='CA'):
+        return self.Business(business_id=schemaless.guid(), city='Oakland', state='CA').save()
+
     def test_querying(self):
-        b = self.Business(business_id=schemaless.guid(), city='Oakland', state='CA').save()
+        b = self.add_biz()
         assert not b.is_dirty
 
         self.assert_equal(b, self.Business.get(c.business_id == b.business_id))
@@ -272,11 +276,16 @@ class AutomaticORMTestCase(ORMTestCase):
         self.assert_used_index(self.Business, 'index_00003_8e5e9c3d848aa30749151092bbff622d')
 
     def test_all(self):
-        b = self.Business(business_id=schemaless.guid(), city='Oakland', state='CA').save()
+        b = self.add_biz()
         assert not b.is_dirty
 
         self.assert_len(1, self.Business.all())
         self.assert_used_index(self.Business, 'entities')
+
+    def test_bool(self):
+        b = self.add_biz()
+        self.assert_equal(b, self.Business.get(c.business_id == b.business_id, c.active == True))
+        self.assert_equal(b, self.Business.get(c.business_id == b.business_id, c.active != False))
 
 if __name__ == '__main__':
     unittest.main()

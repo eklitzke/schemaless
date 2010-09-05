@@ -3,8 +3,15 @@ import sys
 import optparse
 
 import matplotlib
-matplotlib.use('cairo')
 from matplotlib import pyplot
+
+pyplot.rcParams.update({
+        'backend': 'cairo',
+        'axes.labelsize': 10,
+        'legend.fontsize': 10,
+        'xtick.labelsize': 8,
+        'ytick.labelsize': 8,
+        'font.sans-serif': ['Droid Sans']})
 
 def main(csv_name, opts):
 	reader = iter(csv.reader(open(csv_name)))
@@ -21,8 +28,8 @@ def main(csv_name, opts):
 			ys.append(data[name][x])
 		pyplot.plot(xs, ys, label=name)
 		#pyplot.scatter(xs, ys, label=name)
-	pyplot.xlabel('# of records inserted')
-	pyplot.ylabel('time per 10k inserts')
+	pyplot.xlabel('cumulative # of records inserted')
+	pyplot.ylabel('seconds per 10k inserts')
 	pyplot.legend(loc=2)
 	if opts.title:
 		pyplot.title(opts.title)

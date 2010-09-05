@@ -151,10 +151,12 @@ class DataStore(object):
     def create_entities_table(self):
         self.connection.execute("""
             CREATE TABLE entities (
+                added_id INTEGER NOT NULL AUTO_INCREMENT,
                 id BINARY(16) NOT NULL,
                 updated TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 tag MEDIUMINT,
                 body MEDIUMBLOB NOT NULL,
-                PRIMARY KEY (id),
+                PRIMARY KEY (added_id),
+                UNIQUE KEY (id),
                 KEY (updated)
             ) ENGINE=InnoDB""")

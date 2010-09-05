@@ -20,3 +20,13 @@ class DateTimeConverter(Converter):
     @classmethod
     def from_db(cls, val):
         return datetime.datetime.fromtimestamp(val) if val else None
+
+class BooleanConverter(Converter):
+
+    @classmethod
+    def to_db(cls, obj):
+        return 1 if obj else 0
+
+    @classmethod
+    def from_db(cls, val):
+        return bool(val)

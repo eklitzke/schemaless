@@ -84,7 +84,7 @@ class Index(object):
         else:
             q = 'SELECT entity_id FROM %s' % self.table
             if where_clause:
-                q += 'WHERE ' + ' AND '.join(where_clause)
+                q += ' WHERE ' + ' AND '.join(where_clause)
             if order_by:
                 q += ' ORDER BY %s %s' % (order_by.name, order_by.order)
             if limit:

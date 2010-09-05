@@ -43,29 +43,49 @@ def drop_test_entities(conn):
     if c.fetchone():
         c.execute('DROP TABLE test_entities')
 
-def increment_worker(c):
+def create_table(conn, lines, data):
+    q = []
+    q.append('CREATE TABLE test_entities (')
+    q.extend(['    ' + l for l in lines])
+    q.append(') ENGINE=InnoDB')
+
+    query = '\n'.join(q)
+    c = conn.cursor()
+    print query
+    c.execute('\n'.join(q))
+    if data:
+        c.execute('ALTER TABLE test_entities ADD COLUMN payload MEDIUMBLOB')
+        print('ALTER TABLE test_entities ADD COLUMN payload MEDIUMBLOB')
+
+def increment_worker(c, data):
     os.urandom(16) # ensure that this has the same overhead as uuid_worker;
                    # comment out if you don't like this fairness
-    c.execute('INSERT INTO test_entities (added_id) VALUES (NULL)')
+    if data:
+        c.execute('INSERT INTO test_entities (added_id, payload) VALUES (NULL, %s)', data)
+    else:
+        c.execute('INSERT INTO test_entities (added_id) VALUES (NULL)')
 
-def uuid_worker(c):
-    c.execute('INSERT INTO test_entities (id) VALUES (%s)', os.urandom(16))
+def uuid_worker(c, data):
+    if data:
+        c.execute('INSERT INTO test_entities (id, payload) VALUES (%s, %s)', (os.urandom(16), data))
+    else:
+        c.execute('INSERT INTO test_entities (id) VALUES (%s)', os.urandom(16))
 
-def bench(name, opts, conn, schema, worker=uuid_worker):
+def bench(name, opts, conn, data, schema, worker=uuid_worker):
     drop_test_entities(conn)
-    if opts.sleep:
-        time.sleep(opts.sleep)
     print name
     print '=' * len(name)
+    create_table(conn, schema, data=data)
+    if opts.sleep:
+        time.sleep(opts.sleep)
     times = []
     c = conn.cursor()
-    c.execute(schema)
     for x in xrange(opts.num_iterations):
         if not opts.autocommit:
             c.execute('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ')
         ts = time.time()
         for y in xrange(opts.batch_size):
-            worker(c)
+            worker(c, data)
         conn.commit()
         elapsed = time.time() - ts
         times.append(elapsed)
@@ -87,17 +107,8 @@ def bench(name, opts, conn, schema, worker=uuid_worker):
     print
     return times
 
-if __name__ == '__main__':
-    parser = optparse.OptionParser()
-    parser.add_option('-a', '--autocommit', action='store_true', default=False, help='Enable auto-commit')
-    parser.add_option('-n', '--num-iterations', type='int', default=100, help='How many iterations to run')
-    parser.add_option('-b', '--batch-size', type='int', default=10000, help='How many rows to insert per txn')
-    parser.add_option('-c', '--csv', default=None, help='Store benchmark output in the specified CSV file')
-    parser.add_option('-s', '--sleep', type='int', default=10, help='How long to sleep between tests')
-    opts, args = parser.parse_args()
+def main(opts, args):
     start = time.time()
-    if len(args) != 1:
-        parser.error('must pass exactly one argument, the path to the mysql config file')
     cfg = yaml.load(open(args[0]).read())
     conn = MySQLdb.connect(**cfg)
 
@@ -114,58 +125,34 @@ if __name__ == '__main__':
         print 'autocommit is OFF'
     print
 
-    bench('just auto_increment', opts, conn, """
-CREATE TABLE test_entities (
-    added_id INTEGER NOT NULL AUTO_INCREMENT,
-    PRIMARY KEY (added_id)
-) ENGINE=InnoDB
-""", increment_worker)
+    data = os.urandom(opts.data) if opts.data else None
+    bench('just auto_increment', opts, conn, data,
+          ['added_id INTEGER NOT NULL AUTO_INCREMENT,',
+           'PRIMARY KEY (added_id)'], increment_worker)
 
-    bench('auto_increment, no key', opts, conn, """
-CREATE TABLE test_entities (
-    added_id INTEGER NOT NULL AUTO_INCREMENT,
-    id BINARY(16) NOT NULL,
-    PRIMARY KEY (added_id)
-) ENGINE=InnoDB
-""")
+    bench('auto_increment, key', opts, conn, data,
+          ['added_id INTEGER NOT NULL AUTO_INCREMENT,',
+           'id BINARY(16) NOT NULL,',
+           'PRIMARY KEY (added_id),',
+           'KEY (id)'])
 
-    bench('auto_increment, key', opts, conn, """
-CREATE TABLE test_entities (
-    added_id INTEGER NOT NULL AUTO_INCREMENT,
-    id BINARY(16) NOT NULL,
-    PRIMARY KEY (added_id),
-    KEY (id)
-) ENGINE=InnoDB
-""")
+    bench('auto_increment, unique key', opts, conn, data,
+          ['added_id INTEGER NOT NULL AUTO_INCREMENT,',
+           'id BINARY(16) NOT NULL,',
+           'PRIMARY KEY (added_id),',
+           'UNIQUE KEY (id)'])
 
-    bench('auto_increment, unique key', opts, conn, """
-CREATE TABLE test_entities (
-    added_id INTEGER NOT NULL AUTO_INCREMENT,
-    id BINARY(16) NOT NULL,
-    PRIMARY KEY (added_id),
-    UNIQUE KEY (id)
-) ENGINE=InnoDB
-""")
+    bench('w/o auto-increment, key', opts, conn, data,
+          ['id BINARY(16) NOT NULL,'
+           'KEY (id)'])
 
-    bench('w/o auto-increment, key', opts, conn, """
-CREATE TABLE test_entities (
-    id BINARY(16) NOT NULL,
-    KEY (id)
-) ENGINE=InnoDB
-""")
+    bench('w/o auto-increment, unique key', opts, conn, data,
+          ['id BINARY(16) NOT NULL,',
+           'UNIQUE KEY (id)'])
 
-    bench('w/o auto-increment, unique key', opts, conn, """
-CREATE TABLE test_entities (
-    id BINARY(16) NOT NULL,
-    UNIQUE KEY (id)
-) ENGINE=InnoDB
-""")
-
-    bench('w/o auto-increment, primary key', opts, conn, """
-CREATE TABLE test_entities (
-    id BINARY(16) NOT NULL,
-    PRIMARY KEY (id)
-) ENGINE=InnoDB""")
+    bench('w/o auto-increment, primary key', opts, conn, data,
+          ['id BINARY(16) NOT NULL,',
+           'PRIMARY KEY (id)'])
 
     drop_test_entities(conn)
     if opts.csv:
@@ -178,3 +165,16 @@ CREATE TABLE test_entities (
             writer.writerow([tot] + [t[x] for _, t in OVERALL_TIMES])
         print 'csv output is in %r' % (opts.csv,)
     print 'total time was %1.3f seconds' % (time.time() - start)
+
+if __name__ == '__main__':
+    parser = optparse.OptionParser()
+    parser.add_option('-a', '--autocommit', action='store_true', default=False, help='Enable auto-commit')
+    parser.add_option('-b', '--batch-size', type='int', default=10000, help='How many rows to insert per txn')
+    parser.add_option('-c', '--csv', default=None, help='Store benchmark output in the specified CSV file')
+    parser.add_option('-d', '--data', type='int', default=0, help='Add a data column, with this size')
+    parser.add_option('-n', '--num-iterations', type='int', default=100, help='How many iterations to run')
+    parser.add_option('-s', '--sleep', type='int', default=10, help='How long to sleep between tests')
+    opts, args = parser.parse_args()
+    if len(args) != 1:
+        parser.error('must pass exactly one argument, the path to the mysql config file')
+    main(opts, args)

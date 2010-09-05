@@ -22,9 +22,9 @@ Base = orm.make_base(session, tags_file=os.path.join(dirname, 'tags.yaml'))
 
 class Post(Base):
     _columns = [
-        orm.VARCHAR('title', 255, nullable=False),
-        orm.TEXT('content', nullable=False),
-        orm.DATETIME('time_created', default=datetime.datetime.now)
+        orm.String('title', 255, required=True),
+        orm.Text('content', required=True),
+        orm.DateTime('time_created', default=datetime.datetime.now)
         ]
 
     _indexes = [['time_created']]
@@ -43,10 +43,10 @@ class Post(Base):
 
 class Comment(Base):
     _columns = [
-        orm.GUID('post_id', 32, nullable=False),
-        orm.VARCHAR('author', 255),
-        orm.TEXT('content', nullable=False),
-        orm.DATETIME('time_created', default=datetime.datetime.now)
+        orm.Guid('post_id', 32, required=True),
+        orm.String('author', 255),
+        orm.Text('content', required=True),
+        orm.DateTime('time_created', default=datetime.datetime.now)
         ]
 
     _indexes = [['comment_id']]
