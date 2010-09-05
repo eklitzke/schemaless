@@ -35,7 +35,7 @@ class Index(object):
             for f in fields:
                 sql.append('    %s,' % (f,))
             sql.append('    `entity_id` BINARY(16) NOT NULL,')
-            sql.append('    KEY (`entity_id`),')
+            sql.append('    UNIQUE KEY (`entity_id`),')
             sql.append('    PRIMARY KEY (%s, `entity_id`)' % (field_string,))
             sql.append(') ENGINE=InnoDB')
             sql = '\n'.join(sql)

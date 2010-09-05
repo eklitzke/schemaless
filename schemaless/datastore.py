@@ -33,14 +33,17 @@ class DataStore(object):
         self.indexes.append(idx)
         return idx
 
-    def _find_indexes(self, entity):
+    def _find_indexes(self, entity, include_entities=False):
         """Find all of the indexes that may index an entity, based on the keys
         in the entity.
         """
         keys = frozenset(entity.keys())
         for idx in self.indexes:
             if idx.matches(entity, keys):
-                yield idx
+                if idx.table != 'entities':
+                    yield idx
+                elif include_entities:
+                    yield idx
     
     def put(self, entity, tag=None):
         is_update = False
@@ -68,8 +71,6 @@ class DataStore(object):
             return self._put_new(entity_id, entity_copy, tag, body)
 
     def _insert_index(self, index, entity_id, entity):
-        if index.table == 'entities':
-            return
         pnames = ['entity_id']
         vals = [entity_id]
         for p in index.properties:
@@ -86,9 +87,8 @@ class DataStore(object):
             raise
 
     def _update_index(self, index, entity_id, entity):
-        try:
-            self._insert_index(index, entity_id, entity)
-        except tornado.database.IntegrityError:
+        row = self.connection.get('SELECT * FROM %s WHERE entity_id = %%s' % (index.table,), entity_id)
+        if row:
             vals = []
             q = 'UPDATE %s SET ' % index.table
             qs = []
@@ -99,8 +99,8 @@ class DataStore(object):
             q += ' WHERE entity_id = %s'
             vals.append(entity_id)
             self.connection.execute(q, *vals)
-        except Exception:
-            raise
+        else:
+            self._insert_index(index, entity_id, entity)
 
     def _put_new(self, entity_id, entity, tag, body):
         pk = self.connection.execute('INSERT INTO entities (id, updated, tag, body) VALUES (%s, FROM_UNIXTIME(%s), %s, %s)', entity_id, int(entity['updated']), tag, body)
